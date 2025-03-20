@@ -9,7 +9,6 @@
 #include "SystemTime.h"
 #include "SystemVersion.h"
 #include "SystemWiFi.h"
-#include "Telemetry.h"
 
 #include "iothub_client_version.h"
 #include "iothub_client_ll.h"
@@ -225,7 +224,6 @@ static void ConnectionStatusCallback(IOTHUB_CLIENT_CONNECTION_STATUS result, IOT
             clientConnected = true;
             LogInfo(">>>Connection status: connected");
 
-            LogTrace("Create", "IoT hub established");
         }
         break;
     }
@@ -519,7 +517,6 @@ bool DevKitMQTTClient_Init(bool hasDeviceTwin, bool traceOn, const char * modelI
         // Create the IoTHub client
         if ((iotHubClientHandle = IoTHubClient_LL_CreateFromConnectionString((char *)connString, MQTT_Protocol)) == NULL)
         {
-            LogTrace("Create", "IoT hub establish failed");
             return false;
         }
     }
@@ -813,11 +810,4 @@ void DevKitMQTTClient_Reset(void)
 {
     resetClient = true;
     CheckConnection();
-}
-
-void LogTrace(const char *event, const char *message)
-{
-    // Microsoft collects data to operate effectively and provide you the best experiences with our products.
-    // We collect data about the features you use, how often you use them, and how you use them.
-    send_telemetry_data_async(iothub_hostname, event, message);
 }

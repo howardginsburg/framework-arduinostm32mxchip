@@ -7,7 +7,6 @@
 #include "NetworkInterface.h"
 #include "MQTTmbed.h"
 #include "SystemWiFi.h"
-#include "Telemetry.h"
 
 class MQTTNetwork
 {
@@ -65,16 +64,9 @@ class MQTTNetwork
 
             int ret;
 
-            if ((ret = _tcpSocket->open(WiFiInterface())) == 0 && (ret = _tcpSocket->connect(hostname, port)) == 0)
-            {
-                // Microsoft collects data to operate effectively and provide you the best experiences with our products.
-                // We collect data about the features you use, how often you use them, and how you use them.
-                send_telemetry_data_async("", "mqtt connection", "Connect MQTT server successfully");
-            }
-            else
+            if (!((ret = _tcpSocket->open(WiFiInterface())) == 0 && (ret = _tcpSocket->connect(hostname, port)) == 0))
             {
                 // open socket failed or connect host failed
-                send_telemetry_data_async("", "mqtt connection", "Connect MQTT server failed.");
                 delete _tcpSocket;
                 _tcpSocket = NULL;
             }

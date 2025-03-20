@@ -20,7 +20,6 @@
 #include "EMW10xxInterface.h"
 #include "SystemTime.h"
 #include "SystemWiFi.h"
-#include "Telemetry.h"
 #include "utility/wl_definitions.h"
 #include "utility/wl_types.h"
 #include "wiring.h"
@@ -107,13 +106,6 @@ int WiFiClass::begin(char* ssid, const char *passphrase)
     {
         // Sync system from NTP time server
         SyncTime();
-
-        // Initialize the telemetry only after Wi-Fi established
-        telemetry_init();
-
-        // Microsoft collects data to operate effectively and provide you the best experiences with our products.
-        // We collect data about the features you use, how often you use them, and how you use them.
-        send_telemetry_data_async("", "wifi", "Wi-Fi connected");
 
         strcpy(this->ssid, ssid);
         is_station_inited = true;

@@ -3,7 +3,7 @@
 #include "IoT_DevKit_HW.h"
 #include "SystemVersion.h"
 #include "SystemTickCounter.h"
-#include "telemetry.h"
+
 
 #define NUMSENSORS 5 // 5 sensors to display
 
@@ -38,9 +38,6 @@ void getLatestFirmwareVersion()
   {
     snprintf(buffTelemetry, sizeof(buffTelemetry), "Local: %s, Remote: %s", getDevkitVersion(), response->body);
 
-    // Microsoft collects data to operate effectively and provide you the best experiences with our products.
-    // We collect data about the features you use, how often you use them, and how you use them.
-    send_telemetry_data("", "SensorStatusFirmwareVersionSucceeded", buffTelemetry);
 
     if (strcmp(response->body, getDevkitVersion()) == 0)
     {
@@ -55,9 +52,6 @@ void getLatestFirmwareVersion()
   {
     snprintf(buffTelemetry, sizeof(buffTelemetry), "Local: %s", getDevkitVersion());
 
-    // Microsoft collects data to operate effectively and provide you the best experiences with our products.
-    // We collect data about the features you use, how often you use them, and how you use them.
-    send_telemetry_data("", "SensorStatusFirmwareVersionFailed", buffTelemetry);
 
     snprintf(buffInfo, sizeof(buffInfo), "IoT DevKit\r\nCurrent: %s\r\nLatest: N/A\r\nBtn B: Sensor\r\n", getDevkitVersion());
   }

@@ -150,11 +150,6 @@ void DevKitMQTTClient_SetReportConfirmationCallback(REPORT_CONFIRMATION_CALLBACK
 */
 void DevKitMQTTClient_Reset(void);
 
-/**
-* @brief    Log the trace to Microsoft Application Insights
-*/
-void LogTrace(const char *event, const char *message);
-
 #ifdef __cplusplus
 }
 #endif
