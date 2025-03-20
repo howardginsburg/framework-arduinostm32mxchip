@@ -1,0 +1,17 @@
+{
+  "name": "framework-arduinostm32mxchip",
+  "version": "2.0.0",
+  "description": "Arduino Wiring-based Framework for the Azure MXChip IoT DevKit",
+  "keywords": [
+    "framework",
+    "arduino",
+    "microsoft",
+    "azure"
+  ],
+  "homepage": "https://microsoft.github.io/azure-iot-developer-kit/",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/devkit-sdk"
+  }
+}
