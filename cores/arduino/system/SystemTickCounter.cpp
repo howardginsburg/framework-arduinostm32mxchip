@@ -3,7 +3,7 @@
 
 #include "mbed.h"
 #include "SystemTickCounter.h"
-#include "azure_c_shared_utility/tickcounter.h"
+#include "tickcounter.h"
 
 static TICK_COUNTER_HANDLE tick_counter = NULL;
 

@@ -1,1 +1,0 @@
-All Azure IoT Hub  examples were moved to the project catalog in [IoT Device Workbench](https://marketplace.visualstudio.com/items?itemName=vsciot-vscode.vscode-iot-workbench).
