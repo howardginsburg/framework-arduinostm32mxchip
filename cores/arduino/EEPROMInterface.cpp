@@ -363,6 +363,56 @@ int EEPROMInterface::saveX509Cert(char *x509Cert)
     return 0;
 }
 
+int EEPROMInterface::saveMQTTAddress(char *mqttAddress)
+{
+    int len = strlen(mqttAddress) + 1;
+    if (mqttAddress == NULL || mqttAddress[0] == 0 || strlen(mqttAddress) > MQTT_MAX_LEN)
+    {
+        return -1;
+    }
+    return writeWithVerify((uint8_t*)mqttAddress, len, MQTT_ZONE_IDX);
+}
+
+int EEPROMInterface::saveDeviceID(char *deviceID)
+{
+    int len = strlen(deviceID) + 1;
+    if (len > DEVICE_ID_MAX_LEN)
+    {
+        return -1;
+    }
+    
+    int ret = 0;
+    if (deviceID == NULL)
+    {
+        ret = write((uint8_t*)"", 1, DEVICE_ID_ZONE_IDX);
+    }
+    else
+    {
+        ret = write((uint8_t*)deviceID, len, DEVICE_ID_ZONE_IDX);
+    }
+    return ret;
+}
+
+int EEPROMInterface::saveDevicePassword(char *devicePassword)
+{
+    int len = strlen(devicePassword) + 1;
+    if (len > DEVICE_PASSWORD_MAX_LEN)
+    {
+        return -1;
+    }
+    
+    int ret = 0;
+    if (devicePassword == NULL)
+    {
+        ret = write((uint8_t*)"", 1, DEVICE_PASSWORD_ZONE_IDX);
+    }
+    else
+    {
+        ret = write((uint8_t*)devicePassword, len, DEVICE_PASSWORD_ZONE_IDX);
+    }
+    return ret;
+}
+
 int EEPROMInterface::readWiFiSetting(char *ssid, int ssidSize, char *pwd, int pwdSize)
 {
     if (ssid == NULL || ssidSize <= 0)
@@ -441,5 +491,50 @@ int EEPROMInterface::readX509Cert(char *x509Cert, int buffSize)
         printf("x509 - 2: %d\r\n", size);
     }
     x509Cert[buffSize - 1] = 0;
+    return 0;
+}
+
+int EEPROMInterface::readMQTTAddress(char *mqttAddress, int buffSize)
+{
+    if (mqttAddress == NULL || buffSize <= 0)
+    {
+        return -1;
+    }
+    
+    if (read((uint8_t*)mqttAddress, buffSize, 0x00, MQTT_ZONE_IDX) == -1)
+    {
+        return -1;
+    }
+    mqttAddress[buffSize - 1] = 0;
+    return 0;
+}
+
+int EEPROMInterface::readDeviceID(char *deviceID, int buffSize)
+{
+    if (deviceID == NULL || buffSize <= 0)
+    {
+        return -1;
+    }
+    
+    if (read((uint8_t*)deviceID, buffSize, 0x00, DEVICE_ID_ZONE_IDX) == -1)
+    {
+        return -1;
+    }
+    deviceID[buffSize - 1] = 0;
+    return 0;
+}
+
+int EEPROMInterface::readDevicePassword(char *devicePassword, int buffSize)
+{
+    if (devicePassword == NULL || buffSize <= 0)
+    {
+        return -1;
+    }
+    
+    if (read((uint8_t*)devicePassword, buffSize, 0x00, DEVICE_PASSWORD_ZONE_IDX) == -1)
+    {
+        return -1;
+    }
+    devicePassword[buffSize - 1] = 0;
     return 0;
 }

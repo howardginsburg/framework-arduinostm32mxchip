@@ -37,6 +37,15 @@
 #define WIFI_PWD_ZONE_IDX       STSAFE_ZONE_10_IDX
 #define AZ_IOT_HUB_ZONE_IDX     STSAFE_ZONE_5_IDX
 
+// Reserved zone when using mqtt
+#define MQTT_ZONE_IDX               STSAFE_ZONE_5_IDX
+#define DEVICE_ID_ZONE_IDX          STSAFE_ZONE_6_IDX
+#define DEVICE_PASSWORD_ZONE_IDX    STSAFE_ZONE_7_IDX
+
+#define MQTT_MAX_LEN                512
+#define DEVICE_ID_MAX_LEN           64
+#define DEVICE_PASSWORD_MAX_LEN     64
+
 #define WIFI_SSID_MAX_LEN       32
 #define WIFI_PWD_MAX_LEN        64
 #define AZ_IOT_HUB_MAX_LEN      512
@@ -127,6 +136,10 @@ public:
     */
     int saveX509Cert(char *x509Cert);
 
+    int saveMQTTAddress(char *iotHubString);
+    int saveDeviceID(char *deviceID);
+    int saveDevicePassword(char *devicePassword);
+
     /**
     * @brief    Retrieve Wi-Fi setting from secure chip.
     *
@@ -158,6 +171,10 @@ public:
     * @return   Return 0 on success, otherwise return -1.
     */
     int readX509Cert(char *x509Cert, int buffSize);
+
+    int readMQTTAddress(char *mqttAddress, int buffSize);
+    int readDeviceID(char *deviceID, int buffSize);
+    int readDevicePassword(char *devicePassword, int buffSize);
 
 private:
     void* handle;

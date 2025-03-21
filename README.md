@@ -6,6 +6,7 @@ This project is a fork of the original [Azure IoT SDK](https://github.com/micros
 
 - Removal of the board telemetry collector code as it is now defunct.
 - Removal of the outdated Azure IoT Hub code.
+- Updated the EEPromInterface to add new functions to store MQTT Address, Device ID, and Device Password as an alternative to using the Azure IoT Hub.
 
 ## Usage
 
