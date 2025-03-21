@@ -48,16 +48,25 @@ static void dps_uds_command(int argc, char **argv);
 static void az_iotdps_command(int argc, char **argv);
 static void enable_secure_command(int argc, char **argv);
 
+// MQTT commands
+static void mqtt_command(int argc, char **argv);
+static void deviceid_command(int argc, char **argv);
+static void device_pwd_command(int argc, char **argv);
+
 static const struct console_command cmds[] = {
   {"help",          "Help document",                                                                                                                    false, help_command},
   {"version",       "System version",                                                                                                                   false, get_version_command},
   {"exit",          "Exit and reboot",                                                                                                                  false, reboot_and_exit_command},
   {"scan",          "Scan Wi-Fi AP",                                                                                                                    false, wifi_scan},
   {"set_wifissid",  "Set Wi-Fi SSID",                                                                                                                   false, wifi_ssid_command},
-  {"set_wifipwd",   "Set Wi-Fi password",                                                                                                               true,  wifi_pwd_Command},
+  {"set_wifipwd",   "Set Wi-Fi password",                                                                                                               false, wifi_pwd_Command},
   {"set_az_iothub", "Set IoT Hub device connection string",                                                                                             false, az_iothub_command},
-  {"set_dps_uds",   "Set DPS Unique Device Secret (UDS) for X.509 certificates.",                                                                       true,  dps_uds_command},
+  {"set_dps_uds",   "Set DPS Unique Device Secret (UDS) for X.509 certificates",                                                                       false, dps_uds_command},
   {"set_az_iotdps", "Set DPS Symmetric Key. Format: \"DPSEndpoint=global.azure-devices-provisioning.net;IdScope=XXX;DeviceId=XXX;SymmetricKey=XXX\"",   false, az_iotdps_command},
+  // MQTT commands
+  {"set_mqtt",      "Set MQTT url or ip address",                                                     false, mqtt_command},
+  {"set_deviceid",  "The deviceid (and clientid) to be used when connecting to the broker",          false, deviceid_command},
+  {"set_device_pwd","The device password.  Make sure to set this even if it's just garbage data",    false, device_pwd_command},
   {"enable_secure", "Enable secure channel between AZ3166 and secure chip",                                                                             false, enable_secure_command},
 };
 
@@ -265,6 +274,62 @@ static void az_iotdps_command(int argc, char **argv)
     if (result == 0)
     {
         Serial.printf("INFO: Set DPS connection string successfully.\r\n");
+    }
+}
+
+static void mqtt_command(int argc, char **argv)
+{
+    if (argc == 1 || argv[1] == NULL) 
+    {
+        Serial.printf("Usage: set_mqtt <url or ip address>.\r\n");
+        return;
+    }
+    int len = strlen(argv[1]) + 1;
+    if (len == 0 || len > MQTT_MAX_LEN)
+    {
+        Serial.printf("Invalid mqtt address string.\r\n");
+        return;
+    }
+    
+    EEPROMInterface eeprom;
+    int result = eeprom.saveMQTTAddress(argv[1]);
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set mqtt connection string successfully.\r\n");
+    }
+    else
+    {
+        Serial.printf("ERROR: Set mqtt connection string failed.\r\n");
+    }
+}
+
+static void deviceid_command(int argc, char **argv)
+{
+    EEPROMInterface eeprom;
+    int result = eeprom.saveDeviceID(argv[1]);
+        
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set device id successfully.\r\n");
+    }
+    else
+    {
+        Serial.printf("ERROR: Set device id failed.\r\n");
+    }
+}
+
+static void device_pwd_command(int argc, char **argv)
+{
+    EEPROMInterface eeprom;
+    int result = eeprom.saveDevicePassword(argv[1]);
+    
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set device password successfully.\r\n");
+    }
+    else
+    {
+        Serial.printf("ERROR: Set device password failed.\r\n");
     }
 }
 
