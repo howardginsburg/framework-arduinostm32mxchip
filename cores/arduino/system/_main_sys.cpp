@@ -135,7 +135,8 @@ extern void start_arduino(void);
 
 static void EnterUserMode()
 {
-    Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
+    //Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
+    Serial.print("Press Button A and reset to enter configuration mode.\r\n");
 
     start_arduino();
 
@@ -156,10 +157,10 @@ int main(void)
     {
         EnterConfigurationMode();
     }
-    else if (IsAPMode())
-    {
-        EnterAPMode();
-    }
+    //else if (IsAPMode())
+    //{
+    //    EnterAPMode();
+    //}
     else
     {
         EnterUserMode();
