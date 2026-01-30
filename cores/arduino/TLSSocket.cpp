@@ -115,10 +115,9 @@ static int my_verify(void *data, mbedtls_x509_crt *crt, int depth, uint32_t *fla
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // Class
-TLSSocket::TLSSocket(const char *ssl_ca_pem, NetworkInterface* net_iface)
+
+void TLSSocket::init_common(NetworkInterface* net_iface)
 {
-    _ssl_ca_pem = ssl_ca_pem;
-    
     if (net_iface)
     {
         _tcp_socket = new TCPSocket(net_iface);
@@ -128,15 +127,34 @@ TLSSocket::TLSSocket(const char *ssl_ca_pem, NetworkInterface* net_iface)
         _tcp_socket = NULL;
     }
 
-    if (ssl_ca_pem)
+    if (_ssl_ca_pem)
     {
         // SSL
         mbedtls_entropy_init(&_entropy);
         mbedtls_ctr_drbg_init(&_ctr_drbg);
         mbedtls_x509_crt_init(&_cacert);
+        mbedtls_x509_crt_init(&_clientcert);
+        mbedtls_pk_init(&_clientkey);
         mbedtls_ssl_init(&_ssl);
         mbedtls_ssl_config_init(&_ssl_conf);
     }
+}
+
+TLSSocket::TLSSocket(const char *ssl_ca_pem, NetworkInterface* net_iface)
+{
+    _ssl_ca_pem = ssl_ca_pem;
+    _ssl_client_cert = NULL;
+    _ssl_client_key = NULL;
+    init_common(net_iface);
+}
+
+TLSSocket::TLSSocket(const char *ssl_ca_pem, const char *ssl_client_cert,
+                     const char *ssl_client_key, NetworkInterface* net_iface)
+{
+    _ssl_ca_pem = ssl_ca_pem;
+    _ssl_client_cert = ssl_client_cert;
+    _ssl_client_key = ssl_client_key;
+    init_common(net_iface);
 }
 
 TLSSocket::~TLSSocket()
@@ -146,6 +164,8 @@ TLSSocket::~TLSSocket()
         mbedtls_entropy_free(&_entropy);
         mbedtls_ctr_drbg_free(&_ctr_drbg);
         mbedtls_x509_crt_free(&_cacert);
+        mbedtls_x509_crt_free(&_clientcert);
+        mbedtls_pk_free(&_clientkey);
         mbedtls_ssl_free(&_ssl);
         mbedtls_ssl_config_free(&_ssl_conf);
     }
@@ -200,6 +220,27 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
      * MBEDTLS_SSL_VERIFY_NONE in the call to mbedtls_ssl_conf_authmode()
      */
     mbedtls_ssl_conf_authmode(&_ssl_conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+    
+    // Configure client certificate for mutual TLS if provided
+    if (_ssl_client_cert != NULL && _ssl_client_key != NULL)
+    {
+        if ((ret = mbedtls_x509_crt_parse(&_clientcert, (const unsigned char *)_ssl_client_cert,
+                           strlen(_ssl_client_cert) + 1)) != 0)
+        {
+            return -1;
+        }
+        
+        if ((ret = mbedtls_pk_parse_key(&_clientkey, (const unsigned char *)_ssl_client_key,
+                         strlen(_ssl_client_key) + 1, NULL, 0)) != 0)
+        {
+            return -1;
+        }
+        
+        if ((ret = mbedtls_ssl_conf_own_cert(&_ssl_conf, &_clientcert, &_clientkey)) != 0)
+        {
+            return -1;
+        }
+    }
 
 #if DEBUG_LEVEL > 0
     mbedtls_ssl_conf_verify(&_ssl_conf, my_verify, NULL);

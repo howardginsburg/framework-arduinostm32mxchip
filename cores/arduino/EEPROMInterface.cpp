@@ -538,3 +538,67 @@ int EEPROMInterface::readDevicePassword(char *devicePassword, int buffSize)
     devicePassword[buffSize - 1] = 0;
     return 0;
 }
+
+int EEPROMInterface::saveClientCert(char *clientCert)
+{
+    if (clientCert == NULL || clientCert[0] == 0)
+    {
+        return -1;
+    }
+    
+    int len = strlen(clientCert) + 1;
+    if (len > CLIENT_CERT_MAX_LEN)
+    {
+        return -1;
+    }
+    
+    return writeWithVerify((uint8_t*)clientCert, len, CLIENT_CERT_ZONE_IDX);
+}
+
+int EEPROMInterface::saveClientKey(char *clientKey)
+{
+    if (clientKey == NULL || clientKey[0] == 0)
+    {
+        return -1;
+    }
+    
+    int len = strlen(clientKey) + 1;
+    if (len > CLIENT_KEY_MAX_LEN)
+    {
+        return -1;
+    }
+    
+    // Note: For production use, ensure secure channel is enabled
+    // to encrypt the private key at rest
+    return writeWithVerify((uint8_t*)clientKey, len, CLIENT_KEY_ZONE_IDX);
+}
+
+int EEPROMInterface::readClientCert(char *clientCert, int buffSize)
+{
+    if (clientCert == NULL || buffSize <= 0)
+    {
+        return -1;
+    }
+    
+    if (read((uint8_t*)clientCert, buffSize, 0x00, CLIENT_CERT_ZONE_IDX) == -1)
+    {
+        return -1;
+    }
+    clientCert[buffSize - 1] = 0;
+    return 0;
+}
+
+int EEPROMInterface::readClientKey(char *clientKey, int buffSize)
+{
+    if (clientKey == NULL || buffSize <= 0)
+    {
+        return -1;
+    }
+    
+    if (read((uint8_t*)clientKey, buffSize, 0x00, CLIENT_KEY_ZONE_IDX) == -1)
+    {
+        return -1;
+    }
+    clientKey[buffSize - 1] = 0;
+    return 0;
+}

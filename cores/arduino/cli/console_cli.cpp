@@ -29,7 +29,7 @@ struct console_command
 #define DEL_CHAR        0x7f
 #define PROMPT          "\r\n# "
 
-#define INBUF_SIZE      1024
+#define INBUF_SIZE      4096
 
 ////////////////////////////////////////////////////////////////////////////////////
 // System functions
@@ -53,6 +53,12 @@ static void mqtt_command(int argc, char **argv);
 static void deviceid_command(int argc, char **argv);
 static void device_pwd_command(int argc, char **argv);
 
+// Certificate commands
+static void set_cacert_command(int argc, char **argv);
+static void set_clientcert_command(int argc, char **argv);
+static void set_clientkey_command(int argc, char **argv);
+static void show_cert_status_command(int argc, char **argv);
+
 static const struct console_command cmds[] = {
   {"help",          "Help document",                                                                                                                    false, help_command},
   {"version",       "System version",                                                                                                                   false, get_version_command},
@@ -67,6 +73,11 @@ static const struct console_command cmds[] = {
   {"set_mqtt",      "Set MQTT url or ip address",                                                     false, mqtt_command},
   {"set_deviceid",  "The deviceid (and clientid) to be used when connecting to the broker",          false, deviceid_command},
   {"set_device_pwd","The device password.  Make sure to set this even if it's just garbage data",    false, device_pwd_command},
+  // Certificate commands
+  {"set_cacert",    "Set CA certificate (PEM format, use \\n for newlines)",                          false, set_cacert_command},
+  {"set_clientcert","Set client certificate for mutual TLS (PEM format)",                            false, set_clientcert_command},
+  {"set_clientkey", "Set client private key for mutual TLS (PEM format)",                             true,  set_clientkey_command},
+  {"cert_status",   "Show certificate storage status",                                                false, show_cert_status_command},
   {"enable_secure", "Enable secure channel between AZ3166 and secure chip",                                                                             false, enable_secure_command},
 };
 
@@ -330,6 +341,217 @@ static void device_pwd_command(int argc, char **argv)
     else
     {
         Serial.printf("ERROR: Set device password failed.\r\n");
+    }
+}
+
+// Helper function to convert escaped newlines to actual newlines
+static void convert_escaped_newlines(char* str)
+{
+    if (str == NULL) return;
+    
+    char* src = str;
+    char* dst = str;
+    
+    while (*src)
+    {
+        if (*src == '\\' && *(src + 1) == 'n')
+        {
+            *dst = '\n';
+            src += 2;
+        }
+        else
+        {
+            *dst = *src;
+            src++;
+        }
+        dst++;
+    }
+    *dst = '\0';
+}
+
+static void set_cacert_command(int argc, char **argv)
+{
+    if (argc < 2 || argv[1] == NULL)
+    {
+        Serial.printf("Usage: set_cacert \"<PEM certificate>\"\r\n");
+        Serial.printf("  Use \\n for newlines, e.g.:\r\n");
+        Serial.printf("  set_cacert \"-----BEGIN CERTIFICATE-----\\nMIID...\\n-----END CERTIFICATE-----\\n\"\r\n");
+        Serial.printf("  Max size: %d bytes\r\n", AZ_IOT_X509_MAX_LEN);
+        return;
+    }
+    
+    // Make a copy and convert escaped newlines
+    char* cert = (char*)malloc(strlen(argv[1]) + 1);
+    if (cert == NULL)
+    {
+        Serial.printf("ERROR: Out of memory.\r\n");
+        return;
+    }
+    strcpy(cert, argv[1]);
+    convert_escaped_newlines(cert);
+    
+    int len = strlen(cert);
+    if (len == 0 || len > AZ_IOT_X509_MAX_LEN)
+    {
+        Serial.printf("ERROR: Certificate too large. Max %d bytes, got %d.\r\n", AZ_IOT_X509_MAX_LEN, len);
+        free(cert);
+        return;
+    }
+    
+    EEPROMInterface eeprom;
+    int result = eeprom.saveX509Cert(cert);
+    free(cert);
+    
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set CA certificate successfully (%d bytes).\r\n", len);
+    }
+    else
+    {
+        Serial.printf("ERROR: Failed to save CA certificate.\r\n");
+    }
+}
+
+static void set_clientcert_command(int argc, char **argv)
+{
+    if (argc < 2 || argv[1] == NULL)
+    {
+        Serial.printf("Usage: set_clientcert \"<PEM certificate>\"\r\n");
+        Serial.printf("  Use \\n for newlines.\r\n");
+        Serial.printf("  Max size: %d bytes\r\n", CLIENT_CERT_MAX_LEN);
+        return;
+    }
+    
+    char* cert = (char*)malloc(strlen(argv[1]) + 1);
+    if (cert == NULL)
+    {
+        Serial.printf("ERROR: Out of memory.\r\n");
+        return;
+    }
+    strcpy(cert, argv[1]);
+    convert_escaped_newlines(cert);
+    
+    int len = strlen(cert);
+    if (len == 0 || len > CLIENT_CERT_MAX_LEN)
+    {
+        Serial.printf("ERROR: Certificate too large. Max %d bytes, got %d.\r\n", CLIENT_CERT_MAX_LEN, len);
+        free(cert);
+        return;
+    }
+    
+    EEPROMInterface eeprom;
+    int result = eeprom.saveClientCert(cert);
+    free(cert);
+    
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set client certificate successfully (%d bytes).\r\n", len);
+    }
+    else
+    {
+        Serial.printf("ERROR: Failed to save client certificate.\r\n");
+    }
+}
+
+static void set_clientkey_command(int argc, char **argv)
+{
+    if (argc < 2 || argv[1] == NULL)
+    {
+        Serial.printf("Usage: set_clientkey \"<PEM private key>\"\r\n");
+        Serial.printf("  Use \\n for newlines.\r\n");
+        Serial.printf("  Max size: %d bytes\r\n", CLIENT_KEY_MAX_LEN);
+        Serial.printf("  WARNING: For security, enable secure channel first!\r\n");
+        return;
+    }
+    
+    char* key = (char*)malloc(strlen(argv[1]) + 1);
+    if (key == NULL)
+    {
+        Serial.printf("ERROR: Out of memory.\r\n");
+        return;
+    }
+    strcpy(key, argv[1]);
+    convert_escaped_newlines(key);
+    
+    int len = strlen(key);
+    if (len == 0 || len > CLIENT_KEY_MAX_LEN)
+    {
+        Serial.printf("ERROR: Key too large. Max %d bytes, got %d.\r\n", CLIENT_KEY_MAX_LEN, len);
+        free(key);
+        return;
+    }
+    
+    EEPROMInterface eeprom;
+    int result = eeprom.saveClientKey(key);
+    
+    // Zero out the key from memory for security
+    memset(key, 0, len);
+    free(key);
+    
+    if (result == 0)
+    {
+        Serial.printf("INFO: Set client private key successfully (%d bytes).\r\n", len);
+    }
+    else
+    {
+        Serial.printf("ERROR: Failed to save client private key.\r\n");
+    }
+}
+
+static void show_cert_status_command(int argc, char **argv)
+{
+    EEPROMInterface eeprom;
+    char buffer[64];
+    
+    Serial.printf("Certificate Storage Status:\r\n");
+    Serial.printf("  CA Certificate (max %d bytes): ", AZ_IOT_X509_MAX_LEN);
+    if (eeprom.readX509Cert(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
+    {
+        Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
+    }
+    else
+    {
+        Serial.printf("NOT SET\r\n");
+    }
+    
+    Serial.printf("  Client Certificate (max %d bytes): ", CLIENT_CERT_MAX_LEN);
+    if (eeprom.readClientCert(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
+    {
+        Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
+    }
+    else
+    {
+        Serial.printf("NOT SET\r\n");
+    }
+    
+    Serial.printf("  Client Private Key (max %d bytes): ", CLIENT_KEY_MAX_LEN);
+    if (eeprom.readClientKey(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
+    {
+        Serial.printf("SET (hidden)\r\n");
+    }
+    else
+    {
+        Serial.printf("NOT SET\r\n");
+    }
+    
+    Serial.printf("  MQTT Address (max %d bytes): ", MQTT_MAX_LEN);
+    if (eeprom.readMQTTAddress(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
+    {
+        Serial.printf("%s\r\n", buffer);
+    }
+    else
+    {
+        Serial.printf("NOT SET\r\n");
+    }
+    
+    Serial.printf("  Device ID (max %d bytes): ", DEVICE_ID_MAX_LEN);
+    if (eeprom.readDeviceID(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
+    {
+        Serial.printf("%s\r\n", buffer);
+    }
+    else
+    {
+        Serial.printf("NOT SET\r\n");
     }
 }
 

@@ -42,9 +42,18 @@
 #define DEVICE_ID_ZONE_IDX          STSAFE_ZONE_6_IDX
 #define DEVICE_PASSWORD_ZONE_IDX    STSAFE_ZONE_7_IDX
 
+// Client certificate zone (uses Zone 2 - 192 bytes, for small certs or cert fingerprints)
+// Note: Full client certs may need multiple zones like X509 CA cert storage
+#define CLIENT_CERT_ZONE_IDX        STSAFE_ZONE_2_IDX
+// Client private key zone (uses Zone 8 - 880 bytes)
+// Private keys are typically 1-2KB, this may need compression or external storage
+#define CLIENT_KEY_ZONE_IDX         STSAFE_ZONE_8_IDX
+
 #define MQTT_MAX_LEN                512
 #define DEVICE_ID_MAX_LEN           64
 #define DEVICE_PASSWORD_MAX_LEN     64
+#define CLIENT_CERT_MAX_LEN         STSAFE_ZONE_2_SIZE
+#define CLIENT_KEY_MAX_LEN          STSAFE_ZONE_8_SIZE
 
 #define WIFI_SSID_MAX_LEN       32
 #define WIFI_PWD_MAX_LEN        64
@@ -141,6 +150,28 @@ public:
     int saveDevicePassword(char *devicePassword);
 
     /**
+    * @brief    Save client certificate for mutual TLS to secure chip.
+    *
+    * @param    clientCert          The client certificate in PEM format to be saved.
+    *                               Maximum size is CLIENT_CERT_MAX_LEN (192 bytes).
+    *                               For larger certs, consider using saveX509Cert zones.
+    *
+    * @return   Return 0 on success, otherwise return -1.
+    */
+    int saveClientCert(char *clientCert);
+
+    /**
+    * @brief    Save client private key for mutual TLS to secure chip.
+    *
+    * @param    clientKey           The client private key in PEM format to be saved.
+    *                               Maximum size is CLIENT_KEY_MAX_LEN (880 bytes).
+    *                               WARNING: Ensure secure channel is enabled before storing keys.
+    *
+    * @return   Return 0 on success, otherwise return -1.
+    */
+    int saveClientKey(char *clientKey);
+
+    /**
     * @brief    Retrieve Wi-Fi setting from secure chip.
     *
     * @param    ssid                The buffer to retrieve Wi-Fi SSID.
@@ -175,6 +206,26 @@ public:
     int readMQTTAddress(char *mqttAddress, int buffSize);
     int readDeviceID(char *deviceID, int buffSize);
     int readDevicePassword(char *devicePassword, int buffSize);
+
+    /**
+    * @brief    Retrieve client certificate from secure chip.
+    *
+    * @param    clientCert          The buffer to retrieve client certificate.
+    *           buffSize            The buffer size (max CLIENT_CERT_MAX_LEN).
+    *
+    * @return   Return 0 on success, otherwise return -1.
+    */
+    int readClientCert(char *clientCert, int buffSize);
+
+    /**
+    * @brief    Retrieve client private key from secure chip.
+    *
+    * @param    clientKey           The buffer to retrieve client private key.
+    *           buffSize            The buffer size (max CLIENT_KEY_MAX_LEN).
+    *
+    * @return   Return 0 on success, otherwise return -1.
+    */
+    int readClientKey(char *clientKey, int buffSize);
 
 private:
     void* handle;
