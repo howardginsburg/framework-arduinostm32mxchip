@@ -21,6 +21,7 @@ extern "C" {
 
 #include "IPAddress.h"
 #include "AZ3166WiFiClient.h"
+#include "AZ3166WiFiClientSecure.h"
 #include "AZ3166WiFiServer.h"
 
 class WiFiClass

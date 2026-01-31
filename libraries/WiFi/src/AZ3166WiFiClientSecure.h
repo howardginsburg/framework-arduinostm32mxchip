@@ -12,20 +12,26 @@
  * limitations under the License.
  */
 
-#ifndef wificlient_h
-#define wificlient_h
+#ifndef wificlientsecure_h
+#define wificlientsecure_h
 
 #include "Arduino.h"
 #include "Client.h"
 #include "IPAddress.h"
-#include "TCPSocket.h"
 
-class WiFiClient : public Client
+class TLSSocket;
+
+class WiFiClientSecure : public Client
 {
 public:
-  WiFiClient(TCPSocket* socket);
-  WiFiClient();
-  ~WiFiClient();
+  WiFiClientSecure();
+  WiFiClientSecure(TLSSocket* socket);
+  ~WiFiClientSecure();
+
+  void setCACert(const char* rootCA);
+  void setCertificate(const char* clientCert);
+  void setPrivateKey(const char* privateKey);
+  void setInsecure();
 
   virtual int connect(IPAddress ip, unsigned short port);
   virtual int connect(const char *host, unsigned short port);
@@ -43,9 +49,15 @@ public:
   friend class WiFiServer;
 
 private:
-  TCPSocket* _pTcpSocket;
+  TLSSocket* _pTlsSocket;
   bool _useServerSocket;
+  const char* _caCert;
+  const char* _clientCert;
+  const char* _clientKey;
 };
 
-#endif
+// Backward/compatibility aliases
+typedef WiFiClientSecure AZ3166WiFiClientSecure;
+typedef WiFiClientSecure AZ3166WifiClientSecure;
 
+#endif

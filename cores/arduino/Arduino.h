@@ -61,6 +61,7 @@ extern "C"{
 // Sketch
 extern void setup(void) ;
 extern void loop(void) ;
+extern void yield(void);
 
 #ifdef __cplusplus
 } // extern "C"

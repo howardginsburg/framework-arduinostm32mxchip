@@ -26,3 +26,8 @@ UARTClass Serial;
 * Screen objects
 */
 OLEDDisplay Screen;
+
+void yield(void)
+{
+  Thread::yield();
+}

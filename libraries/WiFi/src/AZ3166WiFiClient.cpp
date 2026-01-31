@@ -73,16 +73,17 @@ int WiFiClient::available()
     return connected();
 }
 
-unsigned int WiFiClient::write(unsigned char b)
+size_t WiFiClient::write(uint8_t b)
 {
     return write(&b, 1);
 }
 
-unsigned int WiFiClient::write(const unsigned char *buf, unsigned int size)
+size_t WiFiClient::write(const uint8_t *buf, size_t size)
 {
     if (_pTcpSocket != NULL)
     {
-        return _pTcpSocket->send((void*)buf, (int)size);
+        int ret = _pTcpSocket->send((void*)buf, (int)size);
+        return (ret > 0) ? (size_t)ret : 0;
     }
     return 0;
 }
@@ -103,7 +104,7 @@ int WiFiClient::read()
         return (int)ch;
 }
 
-int WiFiClient::read(unsigned char* buf, unsigned int size)
+int WiFiClient::read(uint8_t* buf, size_t size)
 {
     if (_pTcpSocket != NULL)
     {
@@ -130,7 +131,7 @@ void WiFiClient::stop()
     }
 }
 
-int WiFiClient::connected()
+uint8_t WiFiClient::connected()
 {
     return ( _pTcpSocket == NULL || _pTcpSocket -> send(NULL, 0) == NSAPI_ERROR_NO_SOCKET) ? 0 : 1;
 }
