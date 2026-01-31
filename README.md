@@ -6,6 +6,7 @@ This project is a fork of the original [Azure IoT SDK](https://github.com/micros
 
 - Removal of the board telemetry collector code as it is now defunct.
 - Removal of the outdated Azure IoT Hub code.
+- Removal of the MQTT libary that did not support TLS.  Updated WiFi libaries to support WiFiClientSecure so that any MQTT Library that supports WiFiClientSecure can be used.
 - Updated the EEPromInterface to add new functions to store broker address, device ID, and device password as an alternative to using the Azure IoT Hub.
 - Updated the CLI that is triggered when pressing Reset + A to have commands to set the broker address, device ID, and device password.
 
