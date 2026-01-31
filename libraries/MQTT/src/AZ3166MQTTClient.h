@@ -374,18 +374,18 @@ public:
 
     /**
      * @brief Process incoming messages and keepalive
-     * @param timeoutMs  Yield timeout in milliseconds
+     * @param timeout_ms  Yield timeout in milliseconds
      * @return 0 on success
      */
-    int loop(unsigned long timeoutMs = 100)
+    int yield(unsigned long timeout_ms = 1000L)
     {
         if (_mqttClient != NULL)
         {
-            return _mqttClient->yield(timeoutMs);
+            return _mqttClient->yield(timeout_ms);
         }
         else if (_mqttClientTLS != NULL)
         {
-            return _mqttClientTLS->yield(timeoutMs);
+            return _mqttClientTLS->yield(timeout_ms);
         }
         return -1;
     }
