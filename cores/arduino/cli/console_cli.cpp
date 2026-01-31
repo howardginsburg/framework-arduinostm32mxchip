@@ -825,7 +825,7 @@ static int handle_input(char* inbuf)
 
 void cli_main(void)
 {
-    char inbuf[INBUF_SIZE];
+    static char inbuf[INBUF_SIZE];
     unsigned int bp = 0;
     
     print_help();
