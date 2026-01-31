@@ -10,6 +10,47 @@ This project is a fork of the original [Azure IoT SDK](https://github.com/micros
 - Updated the EEPromInterface to add new functions to store broker address, device ID, and device password as an alternative to using the Azure IoT Hub.
 - Updated the CLI that is triggered when pressing Reset + A to have commands to set the broker address, device ID, and device password.
 
+## TLS/SSL Limitations
+
+### Publish-Only MQTT Operation
+
+The `WiFiClientSecure` classes have been modified to support stable MQTT publish operations over TLS. However, there is an important limitation:
+
+**MQTT subscriptions and message receiving are NOT supported** when using `WiFiClientSecure` with libraries like PubSubClient.
+
+### Technical Details
+
+The underlying mbedTLS implementation (version from 2020) has the following behavior:
+
+1. When `PubSubClient::loop()` calls `available()` and `read()` during idle periods, the TLS socket either:
+   - Receives `MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY` (-30848) from the server
+   - Times out waiting for data
+
+2. These error conditions were previously treated as fatal disconnections, causing:
+   - Unnecessary socket teardown
+   - Reconnection cycles every few seconds
+   - Unstable connection even when publishing works fine
+
+### Workaround for Applications
+
+When using `WiFiClientSecure` with PubSubClient for Azure Event Grid:
+
+```cpp
+void loop() {
+    // Do NOT call mqttClient.loop() - it triggers read timeouts
+    
+    if (!wifiClient.connected()) {
+        reconnect();
+    }
+    
+    // Just publish periodically
+    if (millis() - lastPublish >= 5000) {
+        mqttClient.publish(topic, payload);
+        lastPublish = millis();
+    }
+}
+```
+
 ## Usage
 
 1. Make sure you have the latest firmware on your AZ3166 board. You can find the latest firmware [here](/firmware/devkit-firmware-2.0.0.bin).  Just copy the firmware file to the root of the AZ3166 board and it will automatically flash the firmware.  
