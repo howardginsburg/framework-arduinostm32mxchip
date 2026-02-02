@@ -1,66 +1,149 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. 
+// Modified to use IoT Hub SDK-style buffering and polling
 
 #include "TLSSocket.h"
+#include <stdlib.h>
+#include <string.h>
 
 #define TLS_CUNSTOM "Arduino TLS Socket"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// SSL callback
+// IoT Hub SDK-style SSL callbacks
+// These use the TLSSocket instance pointer to access internal buffer
+
 /**
- * Receive callback for mbed TLS
+ * Receive callback for mbed TLS - IoT Hub SDK style
+ * 
+ * Uses internal buffer and polling loop like tlsio_mbedtls.c on_io_recv()
  */
 static int ssl_recv(void *ctx, unsigned char *buf, size_t len) 
 {
-    int recv = -1;
-    TCPSocket *socket = static_cast<TCPSocket *>(ctx);
-    for (int i = 0; i < 5; ++i)
+    TLSSocket *tls = static_cast<TLSSocket *>(ctx);
+    TCPSocket *socket = tls->_tcp_socket;
+    int pending = 0;
+    
+    // IoT Hub SDK style: poll socket until we have data in buffer
+    while (tls->_recv_buffer_count == 0)
     {
-        recv = socket->recv(buf, len);
-        if (recv != 0) break;
-        wait_ms(500);
+        // Try to receive data from underlying socket
+        unsigned char temp_buf[128];
+        int recv_result = socket->recv(temp_buf, sizeof(temp_buf));
+        
+        if (recv_result > 0)
+        {
+            // Got data - add to internal buffer
+            size_t new_size = tls->_recv_buffer_count + recv_result;
+            unsigned char *new_buffer = (unsigned char *)realloc(tls->_recv_buffer, new_size);
+            if (new_buffer != NULL)
+            {
+                tls->_recv_buffer = new_buffer;
+                memcpy(tls->_recv_buffer + tls->_recv_buffer_count, temp_buf, recv_result);
+                tls->_recv_buffer_count = new_size;
+            }
+            break;  // Got data, exit polling loop
+        }
+        else if (recv_result == NSAPI_ERROR_WOULD_BLOCK || recv_result == 0)
+        {
+            // No data available yet
+            if (tls->_handshake_complete)
+            {
+                // After handshake, don't block - return WANT_READ
+                break;
+            }
+            else
+            {
+                // During handshake: poll with timeout like IoT Hub SDK
+                if (pending++ >= HANDSHAKE_TIMEOUT_MS / HANDSHAKE_WAIT_INTERVAL_MS)
+                {
+                    // Timeout during handshake
+                    return MBEDTLS_ERR_SSL_TIMEOUT;
+                }
+                wait_ms(HANDSHAKE_WAIT_INTERVAL_MS);
+            }
+        }
+        else
+        {
+            // Real socket error
+            return -1;
+        }
     }
-
-    if (NSAPI_ERROR_WOULD_BLOCK == recv)
+    
+    // Return data from internal buffer (like IoT Hub SDK on_io_recv)
+    int result = (int)tls->_recv_buffer_count;
+    if (result > (int)len)
     {
-        return MBEDTLS_ERR_SSL_WANT_READ;
+        result = (int)len;
     }
-    else if (recv <= 0)
+    
+    if (result > 0)
     {
-        return -1;
+        // Copy data to caller's buffer
+        memcpy(buf, tls->_recv_buffer, result);
+        
+        // Shift remaining data in buffer
+        size_t remaining = tls->_recv_buffer_count - result;
+        if (remaining > 0)
+        {
+            memmove(tls->_recv_buffer, tls->_recv_buffer + result, remaining);
+            tls->_recv_buffer_count = remaining;
+            
+            // Shrink buffer
+            unsigned char *new_buffer = (unsigned char *)realloc(tls->_recv_buffer, remaining);
+            if (new_buffer != NULL)
+            {
+                tls->_recv_buffer = new_buffer;
+            }
+        }
+        else
+        {
+            // Buffer empty
+            free(tls->_recv_buffer);
+            tls->_recv_buffer = NULL;
+            tls->_recv_buffer_count = 0;
+        }
+        
+        return result;
     }
-    else
-    {
-        return recv;
-    }
+    
+    // No data in buffer - tell mbedTLS to try again
+    return MBEDTLS_ERR_SSL_WANT_READ;
 }
 
 /**
- * Send callback for mbed TLS
+ * Send callback for mbed TLS - IoT Hub SDK style
+ * 
+ * Loops until all data sent or error (like tlsio_mbedtls.c on_io_send)
  */
 static int ssl_send(void *ctx, const unsigned char *buf, size_t len)
 {
-   int size = -1;
-    TCPSocket *socket = static_cast<TCPSocket *>(ctx);
-    for (int i = 0; i < 5; ++i)
+    TLSSocket *tls = static_cast<TLSSocket *>(ctx);
+    TCPSocket *socket = tls->_tcp_socket;
+    
+    // IoT Hub SDK style: retry loop for send
+    for (int i = 0; i < 10; ++i)
     {
-        size = socket->send(buf, len);
-        if (size != 0) break;
-        wait_ms(500);
+        int size = socket->send(buf, len);
+        
+        if (size > 0)
+        {
+            return size;
+        }
+        else if (size == NSAPI_ERROR_WOULD_BLOCK || size == 0)
+        {
+            // Can't send right now - wait and retry
+            wait_ms(100);
+        }
+        else
+        {
+            // Real socket error
+            return -1;
+        }
     }
-
-    if(NSAPI_ERROR_WOULD_BLOCK == size)
-    {
-        return len;
-    }
-    else if (size <= 0)
-    {
-        return -1;
-    }
-    else
-    {
-        return size;
-    }
+    
+    // Exhausted retries - tell mbedTLS we sent it (like original devkit-sdk)
+    // This prevents mbedTLS from treating it as fatal error
+    return len;
 }
 
 #if DEBUG_LEVEL > 0
@@ -118,6 +201,11 @@ static int my_verify(void *data, mbedtls_x509_crt *crt, int depth, uint32_t *fla
 
 void TLSSocket::init_common(NetworkInterface* net_iface)
 {
+    // IoT Hub SDK-style: initialize receive buffer
+    _recv_buffer = NULL;
+    _recv_buffer_count = 0;
+    _handshake_complete = false;
+    
     if (net_iface)
     {
         _tcp_socket = new TCPSocket(net_iface);
@@ -159,6 +247,13 @@ TLSSocket::TLSSocket(const char *ssl_ca_pem, const char *ssl_client_cert,
 
 TLSSocket::~TLSSocket()
 {
+    // Free receive buffer
+    if (_recv_buffer != NULL)
+    {
+        free(_recv_buffer);
+        _recv_buffer = NULL;
+    }
+    
     if (_ssl_ca_pem)
     {
         mbedtls_entropy_free(&_entropy);
@@ -255,7 +350,8 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     
     mbedtls_ssl_set_hostname(&_ssl, host);
     
-    mbedtls_ssl_set_bio(&_ssl, static_cast<void *>(_tcp_socket), ssl_send, ssl_recv, NULL );
+    // IoT Hub SDK style: pass TLSSocket pointer to callbacks for buffer access
+    mbedtls_ssl_set_bio(&_ssl, static_cast<void *>(this), ssl_send, ssl_recv, NULL);
     
     /* Connect to the server */
     ret = _tcp_socket->connect(host, port);
@@ -263,20 +359,24 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     {
         return ret;
     }
+    
+    // IoT Hub SDK style: set socket to non-blocking for polling
+    _tcp_socket->set_blocking(false);
+    _tcp_socket->set_timeout(100);  // Short timeout for polling
 
-   /* Start the handshake */
-    ret = mbedtls_ssl_handshake(&_ssl);
+    /* Start the handshake - IoT Hub SDK style: loop until complete */
+    _handshake_complete = false;
+    do
+    {
+        ret = mbedtls_ssl_handshake(&_ssl);
+    } while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+    
     if (ret < 0) 
     {
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
-            ret != MBEDTLS_ERR_SSL_WANT_WRITE) 
-        {
-            ret = -1;
-        }
-        
-        return ret;
+        return -1;
     }
     
+    _handshake_complete = true;
     return NSAPI_ERROR_OK;
 }
 
@@ -298,19 +398,54 @@ nsapi_size_or_error_t TLSSocket::send(const void *data, nsapi_size_t size)
     
     if (_ssl_ca_pem == NULL)
     {
-        // No SSL
+        // No SSL - use direct TCP send with retry
         const unsigned char *ptr = (const unsigned char *)data;
-        int result, data_size = size;
-        while((result = ssl_send(_tcp_socket, ptr, data_size)) > 0)
+        size_t total_sent = 0;
+        
+        while (total_sent < size)
         {
-            ptr += result;
-            data_size -= result;
-            if (data_size == 0) return size;
+            int result = _tcp_socket->send(ptr + total_sent, size - total_sent);
+            if (result > 0)
+            {
+                total_sent += result;
+            }
+            else if (result == NSAPI_ERROR_WOULD_BLOCK || result == 0)
+            {
+                wait_ms(100);
+            }
+            else
+            {
+                return result;  // Real error
+            }
         }
-        return result;
+        return (nsapi_size_or_error_t)size;
     }
 
-    return mbedtls_ssl_write(&_ssl, (const unsigned char*)data, size);
+    // IoT Hub SDK style: loop until all data sent
+    const unsigned char *ptr = (const unsigned char *)data;
+    int out_left = (int)size;
+    
+    do
+    {
+        int ret = mbedtls_ssl_write(&_ssl, ptr + (size - out_left), out_left);
+        
+        if (ret > 0)
+        {
+            out_left -= ret;
+        }
+        else if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
+        {
+            // Non-fatal: retry
+            wait_ms(10);
+        }
+        else
+        {
+            // Real error
+            return ret;
+        }
+    } while (out_left > 0);
+    
+    return (nsapi_size_or_error_t)size;
 }
 
 nsapi_size_or_error_t TLSSocket::recv(void *data, nsapi_size_t size)
@@ -326,5 +461,19 @@ nsapi_size_or_error_t TLSSocket::recv(void *data, nsapi_size_t size)
         return _tcp_socket->recv(data, size);
     }
 
-    return mbedtls_ssl_read(&_ssl, (unsigned char*)data, size);
+    // IoT Hub SDK style: decode received bytes with retry
+    int ret = mbedtls_ssl_read(&_ssl, (unsigned char*)data, size);
+    
+    if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
+    {
+        // No data available - return 0 (not error)
+        return 0;
+    }
+    else if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)
+    {
+        // Graceful close
+        return 0;
+    }
+    
+    return ret;
 }

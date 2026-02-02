@@ -24,6 +24,9 @@ WiFiClientSecure::WiFiClientSecure()
     _caCert = NULL;
     _clientCert = NULL;
     _clientKey = NULL;
+    _peekBufferLen = 0;
+    _peekBufferPos = 0;
+    _timeout = 2000;
 }
 
 WiFiClientSecure::WiFiClientSecure(TLSSocket* socket)
@@ -33,6 +36,9 @@ WiFiClientSecure::WiFiClientSecure(TLSSocket* socket)
     _caCert = NULL;
     _clientCert = NULL;
     _clientKey = NULL;
+    _peekBufferLen = 0;
+    _peekBufferPos = 0;
+    _timeout = 2000;
 }
 
 WiFiClientSecure::~WiFiClientSecure()
@@ -62,7 +68,11 @@ void WiFiClientSecure::setInsecure()
 
 int WiFiClientSecure::peek()
 {
-    return 0;
+    if (available() > 0)
+    {
+        return _peekBuffer[_peekBufferPos];
+    }
+    return -1;
 }
 
 int WiFiClientSecure::connect(const char* host, unsigned short port)
@@ -72,6 +82,10 @@ int WiFiClientSecure::connect(const char* host, unsigned short port)
         // Already connected
         return 0;
     }
+
+    // Clear peek buffer for new connection
+    _peekBufferLen = 0;
+    _peekBufferPos = 0;
 
     NetworkInterface* netIface = WiFiInterface();
     if (netIface == NULL)
@@ -125,32 +139,67 @@ size_t WiFiClientSecure::write(const uint8_t *buf, size_t size)
 
 int WiFiClientSecure::available()
 {
-    return connected();
+    // Return buffered data count if we have any
+    if (_peekBufferLen > _peekBufferPos)
+    {
+        return _peekBufferLen - _peekBufferPos;
+    }
+    
+    // No buffered data - try to read some
+    if (_pTlsSocket != NULL)
+    {
+        _peekBufferPos = 0;
+        int ret = _pTlsSocket->recv(_peekBuffer, sizeof(_peekBuffer));
+        if (ret > 0)
+        {
+            _peekBufferLen = ret;
+            return ret;
+        }
+        _peekBufferLen = 0;
+    }
+    
+    return 0;
 }
 
 int WiFiClientSecure::read()
 {
-    uint8_t ch;
-
-    int ret = read(&ch, 1);
-    if (ret == 0)
+    // First check/fill the peek buffer
+    if (available() > 0)
     {
-        // Connection closed
-        stop();
+        return _peekBuffer[_peekBufferPos++];
     }
-    if (ret <= 0)
-        return -1;
-    else
-        return (int)ch;
+    return -1;
 }
 
 int WiFiClientSecure::read(uint8_t* buf, size_t size)
 {
-    if (_pTlsSocket != NULL)
+    if (size == 0) return 0;
+    
+    size_t copied = 0;
+    
+    // First drain peek buffer
+    while (copied < size && _peekBufferLen > _peekBufferPos)
     {
-        return _pTlsSocket->recv((void*)buf, (int)size);
+        buf[copied++] = _peekBuffer[_peekBufferPos++];
     }
-    return -1;
+    
+    // If we got all requested from buffer, return
+    if (copied == size)
+    {
+        return (int)copied;
+    }
+    
+    // Need more data - read directly from socket
+    if (_pTlsSocket != NULL && copied < size)
+    {
+        int ret = _pTlsSocket->recv((void*)(buf + copied), (int)(size - copied));
+        if (ret > 0)
+        {
+            copied += ret;
+        }
+    }
+    
+    return (copied > 0) ? (int)copied : 0;
 }
 
 void WiFiClientSecure::flush()
@@ -159,6 +208,10 @@ void WiFiClientSecure::flush()
 
 void WiFiClientSecure::stop()
 {
+    // Clear peek buffer
+    _peekBufferLen = 0;
+    _peekBufferPos = 0;
+    
     if (_pTlsSocket != NULL)
     {
         _pTlsSocket->close();

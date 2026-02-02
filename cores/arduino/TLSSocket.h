@@ -17,6 +17,11 @@
 #include "mbedtls/debug.h"
 #endif
 
+// IoT Hub SDK-style configuration
+#define TLSIO_RECV_BUFFER_SIZE 256
+#define HANDSHAKE_TIMEOUT_MS 5000
+#define HANDSHAKE_WAIT_INTERVAL_MS 10
+
 class TLSSocket
 {
 public:
@@ -49,6 +54,12 @@ public:
      * @return true if client certificate is set
      */
     bool isMutualTLS() const { return _ssl_client_cert != NULL; }
+    
+    // IoT Hub SDK-style: internal receive buffer for ssl_recv callback
+    unsigned char *_recv_buffer;
+    size_t _recv_buffer_count;
+    bool _handshake_complete;
+    TCPSocket *_tcp_socket;
 
 private:
     void init_common(NetworkInterface* net_iface);
@@ -64,8 +75,6 @@ private:
     const char *_ssl_ca_pem;
     const char *_ssl_client_cert;
     const char *_ssl_client_key;
-    TCPSocket *_tcp_socket;
-    bool check_mbedtls_ssl_write(int ret);
 };
 
 

@@ -47,6 +47,7 @@ public:
   virtual int peek();
 
   friend class WiFiServer;
+  void setTimeout(unsigned int timeout) { _timeout = timeout; }
 
 private:
   TLSSocket* _pTlsSocket;
@@ -54,6 +55,12 @@ private:
   const char* _caCert;
   const char* _clientCert;
   const char* _clientKey;
+  
+  // Read buffer for proper available()/peek() support
+  uint8_t _peekBuffer[64];
+  int _peekBufferLen;
+  int _peekBufferPos;
+  unsigned int _timeout;  // Socket timeout in ms
 };
 
 // Backward/compatibility aliases

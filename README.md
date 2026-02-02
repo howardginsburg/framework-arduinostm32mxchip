@@ -1,64 +1,206 @@
-# Azure AZ3166 MXChip IoT DevKit SDK Update
+# MXChip AZ3166 IoT DevKit SDK (Community Fork)
 
-This project is a fork of the original [Azure IoT SDK](https://github.com/microsoft/devkit-sdk) for the MXChip AZ3166 IoT DevKit for PlatformIO. The original SDK is no longer maintained, and this fork aims to provide an updated version of the SDK with the latest features.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+A community-maintained fork of the [Microsoft Azure IoT DevKit SDK](https://github.com/microsoft/devkit-sdk) for the MXChip AZ3166 IoT DevKit, optimized for **PlatformIO** and general-purpose IoT development.
 
-- Removal of the board telemetry collector code as it is now defunct.
-- Removal of the outdated Azure IoT Hub code.
-- Removal of the MQTT libary that did not support TLS.  Updated WiFi libaries to support WiFiClientSecure so that any MQTT Library that supports WiFiClientSecure can be used.
-- Updated the EEPromInterface to add new functions to store broker address, device ID, and device password as an alternative to using the Azure IoT Hub.
-- Updated the CLI that is triggered when pressing Reset + A to have commands to set the broker address, device ID, and device password.
+> **Note**: The original Microsoft SDK was archived in April 2023 and devices can no longer connect to Azure IoT Hub using the built-in libraries. This fork removes deprecated Azure IoT Hub dependencies and adds modern TLS/MQTT capabilities.
 
-## TLS/SSL Limitations
+---
 
-### Publish-Only MQTT Operation
+## Table of Contents
 
-The `WiFiClientSecure` classes have been modified to support stable MQTT publish operations over TLS. However, there is an important limitation:
+- [About the Hardware](#about-the-hardware)
+- [What's Changed](#whats-changed)
+- [Sample Projects](#sample-projects)
+- [Installation](#installation)
+- [WiFiClientSecure Usage](#wificlientsecure-usage)
+- [Configuration CLI](#configuration-cli)
+- [License](#license)
 
-**MQTT subscriptions and message receiving are NOT supported** when using `WiFiClientSecure` with libraries like PubSubClient.
+---
 
-### Technical Details
+## About the Hardware
 
-The underlying mbedTLS implementation (version from 2020) has the following behavior:
+The **MXChip AZ3166 IoT DevKit** features ARM Cortex-M processors with:
 
-1. When `PubSubClient::loop()` calls `available()` and `read()` during idle periods, the TLS socket either:
-   - Receives `MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY` (-30848) from the server
-   - Times out waiting for data
+| Component | Details |
+|-----------|---------|
+| **Processor** | ST Microelectronics STM32F412
+| **WiFi** | Cypress BCM43362
+| **Display** | 128×64 OLED screen |
+| **Audio** | Headphone/speaker output, stereo microphone |
+| **Sensors** | Humidity, temperature, pressure, accelerometer, gyroscope, magnetometer |
+| **Buttons** | A, B, and Reset |
+| **LEDs** | RGB LED, user LED, WiFi LED |
 
-2. These error conditions were previously treated as fatal disconnections, causing:
-   - Unnecessary socket teardown
-   - Reconnection cycles every few seconds
-   - Unstable connection even when publishing works fine
+---
 
-### Workaround for Applications
+## What's Changed
 
-When using `WiFiClientSecure` with PubSubClient for Azure Event Grid:
+This fork includes significant modifications from the original SDK:
+
+### Removed
+
+| Component | Reason |
+|-----------|--------|
+| **Azure IoT Hub libraries** | The built in libraries are outdated; devices can no longer connect |
+| **Board telemetry collector** | Defunct Microsoft telemetry service |
+| **Built-in MQTT library** | Did not support TLS connections |
+
+### Added
+
+| Feature | Description |
+|---------|-------------|
+| **WiFiClientSecure** | Arduino-compatible TLS client for use with any MQTT library (e.g., PubSubClient) |
+| **TLSSocket improvements** | Revamped the TLS socket layer to remediate bugs, etc when using MQTT mTLS (see [TLSPATCH.md](TLSPATCH.md)) |
+| **MQTT configuration storage** | EEPROM functions for broker address, device ID, and password |
+| **CLI commands** | New serial commands for MQTT and certificate configuration |
+| **Certificate management** | Store CA certs, client certs, and private keys in secure EEPROM |
+
+---
+
+## Sample Projects
+
+These complete sample projects demonstrate the framework capabilities:
+
+### [MXChipSecureMQTTDemo](https://github.com/howardginsburg/MXChipSecureMQTTDemo)
+
+A demonstration of mutual TLS (mTLS) MQTT connectivity using X.509 client certificate authentication. This project showcases bidirectional publish/subscribe support with real sensor telemetry (temperature, humidity, pressure) sent as JSON every 5 seconds. Features include automatic WiFi/MQTT reconnection, OLED display for status and readings, and RGB LED indicators for connection state. Includes comprehensive setup instructions for Azure Event Grid MQTT broker with client certificate authentication.
+
+### [MXChipIoTHubDemo](https://github.com/howardginsburg/MXChipIoTHubDemo)
+
+A pure MQTT implementation for connecting to Azure IoT Hub without requiring the deprecated Azure SDK that was a part of the original framework. Uses PubSubClient for direct MQTT communication with full IoT Hub functionality: Device-to-Cloud (D2C) telemetry, Cloud-to-Device (C2D) message receiving, and Device Twin support for reported/desired properties. This lightweight approach demonstrates how to implement Azure IoT Hub connectivity from scratch using standard MQTT topics and SAS token authentication.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- **Visual Studio Code** with the **PlatformIO** extension
+- **MXChip AZ3166** with firmware 2.0.0 or later
+
+### Step 1: Update Firmware
+
+If your board has outdated firmware (especially if you've run Eclipse RTOS samples), update it:
+
+1. Download [devkit-firmware-2.0.0.bin](firmware/devkit-firmware-2.0.0.bin)
+2. Connect your AZ3166 via USB (it mounts as a drive)
+3. Copy the `.bin` file to the drive root
+4. The board will automatically flash and reboot
+
+### Step 2: Create PlatformIO Project
+
+```bash
+# Create a new project or use an existing one
+pio init --board mxchip_az3166
+```
+
+### Step 3: Configure platformio.ini
+
+Add this to your `platformio.ini`:
+
+```ini
+[env:mxchip_az3166]
+platform = ststm32
+board = mxchip_az3166
+framework = arduino
+
+platform_packages =
+    framework-arduinostm32mxchip@https://github.com/howardginsburg/framework-arduinostm32mxchip.git
+```
+
+---
+
+## WiFiClientSecure Usage
+
+The `WiFiClientSecure` class provides Arduino-compatible TLS connections:
+
+### Basic Example with PubSubClient
 
 ```cpp
+#include <AZ3166WiFi.h>
+#include <AZ3166WiFiClientSecure.h>
+#include <PubSubClient.h>
+
+WiFiClientSecure wifiClient;
+PubSubClient mqttClient(wifiClient);
+
+// Root CA certificate (PEM format)
+const char* rootCA = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDdzCCAl+gAwIBAgIEAgAAuTANBg...\n" \
+"-----END CERTIFICATE-----\n";
+
+void setup() {
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+    }
+    
+    // Configure TLS
+    wifiClient.setCACert(rootCA);
+    // Optional: for mutual TLS
+    // wifiClient.setCertificate(clientCert);
+    // wifiClient.setPrivateKey(clientKey);
+    
+    mqttClient.setServer("your-broker.com", 8883);
+}
+
 void loop() {
-    // Do NOT call mqttClient.loop() - it triggers read timeouts
-    
-    if (!wifiClient.connected()) {
-        reconnect();
+    if (!mqttClient.connected()) {
+        mqttClient.connect("clientId", "username", "password");
     }
     
-    // Just publish periodically
-    if (millis() - lastPublish >= 5000) {
-        mqttClient.publish(topic, payload);
-        lastPublish = millis();
-    }
+    mqttClient.publish("topic", "Hello from MXChip!");
+    delay(5000);
 }
 ```
 
-## Usage
+### WiFiClientSecure API
 
-1. Make sure you have the latest firmware on your AZ3166 board. You can find the latest firmware [here](/firmware/devkit-firmware-2.0.0.bin).  Just copy the firmware file to the root of the AZ3166 board and it will automatically flash the firmware.  
-    - This is especially the case if you have tried running the Eclipse RTOS sample as it appears to change the bootloader.
-1. Install VSCode and the PlatformIO extension.
-1. Create a new PlatformIO project using the AZ3166 board.
-1. Update the `platformio.ini` file to point to this repository.
-    ```
-    platform_packages =
-        framework-arduinostm32mxchip@https://github.com/howardginsburg/framework-arduinostm32mxchip.git
-    ```
+| Method | Description |
+|--------|-------------|
+| `setCACert(const char* ca)` | Set root CA certificate for server verification |
+| `setCertificate(const char* cert)` | Set client certificate for mutual TLS |
+| `setPrivateKey(const char* key)` | Set client private key for mutual TLS |
+| `setInsecure()` | Disable certificate verification (not recommended) |
+| `setTimeout(unsigned int ms)` | Set socket timeout in milliseconds |
+
+---
+
+## Configuration CLI
+
+Access the configuration console by holding **Button A** while pressing **Reset**. Connect via serial (115200 baud).
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `help` | Show all available commands |
+| `version` | Display SDK and firmware versions |
+| `exit` | Reboot the device |
+| `scan` | Scan for available WiFi networks |
+| **WiFi Configuration** | |
+| `set_wifissid <ssid>` | Set WiFi network name |
+| `set_wifipwd <password>` | Set WiFi password |
+| **MQTT Configuration** | |
+| `set_mqtt <url>` | Set MQTT broker address |
+| `set_deviceid <id>` | Set device/client ID |
+| `set_device_pwd <password>` | Set device password |
+| **Certificate Configuration** | |
+| `set_cacert "<pem>"` | Set CA certificate (use `\n` for newlines) |
+| `set_clientcert "<pem>"` | Set client certificate |
+| `set_clientkey "<pem>"` | Set client private key |
+| `cert_status` | Show certificate storage status |
+| **Security** | |
+| `enable_secure <level>` | Enable secure channel encryption |
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the original [Microsoft devkit-sdk](https://github.com/microsoft/devkit-sdk) for details.
+
+Portions of this code are Copyright (c) Microsoft Corporation.
