@@ -11,7 +11,7 @@
 #include "SystemTickCounter.h"
 #include "SystemWeb.h"
 #include "SystemWiFi.h"
-#include "DeviceConfig.h"
+#include "config/DeviceConfig.h"
 
 static bool Initialization(void)
 {

@@ -9,8 +9,8 @@
 #include "SystemVersion.h"
 #include "UARTClass.h"
 #include "console_cli.h"
-#include "DeviceConfig.h"
-#include "DeviceConfigCLI.h"
+#include "config/DeviceConfig.h"
+#include "config/DeviceConfigCLI.h"
 
 struct console_command 
 {
