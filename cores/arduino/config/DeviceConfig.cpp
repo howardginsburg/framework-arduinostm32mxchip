@@ -200,7 +200,7 @@ static const ProfileDefinition PROFILES[] = {
 
 void DeviceConfig_Init(ConnectionProfile profile)
 {
-    if (profile >= 0 && profile < sizeof(PROFILES) / sizeof(ProfileDefinition))
+    if (profile < sizeof(PROFILES) / sizeof(ProfileDefinition))
     {
         s_activeProfile = &PROFILES[profile];
     }

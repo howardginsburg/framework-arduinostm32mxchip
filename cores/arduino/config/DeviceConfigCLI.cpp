@@ -72,7 +72,7 @@ void config_print_help(void)
             int maxLen = DeviceConfig_GetMaxLen(SETTING_METADATA[i].id);
             Serial.printf(" - %s <%s>: Set %s (max %d bytes)\r\n",
                 SETTING_METADATA[i].cmdName,
-                SETTING_METADATA[i].isPrivacy ? "value" : "value",
+                "value",
                 SETTING_METADATA[i].label,
                 maxLen);
         }
@@ -151,7 +151,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
             // Zero out memory for keys before freeing
             if (meta->id == SETTING_CLIENT_KEY || meta->id == SETTING_SYMMETRIC_KEY)
             {
-                memset(allocatedValue, 0, strlen(allocatedValue));
+                memset(allocatedValue, 0, len);
             }
             free(allocatedValue);
         }
@@ -167,7 +167,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         // Zero out memory for keys before freeing
         if (meta->id == SETTING_CLIENT_KEY || meta->id == SETTING_SYMMETRIC_KEY)
         {
-            memset(allocatedValue, 0, strlen(allocatedValue));
+            memset(allocatedValue, 0, len);
         }
         free(allocatedValue);
     }
@@ -210,7 +210,7 @@ bool config_is_privacy_command(const char* cmdName)
 void config_show_status(void)
 {
     Serial.printf("Configuration Status (Profile: %s):\r\n", DeviceConfig_GetProfileName());
-    Serial.printf("=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=" "=\r\n");
+    Serial.printf("================================\r\n");
     
     for (int i = 0; i < SETTING_METADATA_COUNT; i++)
     {
