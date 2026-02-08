@@ -11,6 +11,7 @@
 #include "SystemTickCounter.h"
 #include "SystemWeb.h"
 #include "SystemWiFi.h"
+#include "config/DeviceConfig.h"
 
 static bool Initialization(void)
 {
@@ -150,6 +151,9 @@ static void EnterUserMode()
 int main(void)
 {
     Initialization();
+    
+    // Initialize device configuration system with the profile selected at compile time
+    DeviceConfig_Init(CONNECTION_PROFILE);
 
     __sys_setup();
 
