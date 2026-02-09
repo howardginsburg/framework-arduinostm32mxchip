@@ -37,6 +37,7 @@
 #include "app_httpd.h"
 #include "DeviceConfig.h"
 #include "SettingUI.h"
+#include "SettingValidator.h"
 #include "EMW10xxInterface.h"
 #include "httpd.h"
 #include "OledDisplay.h"
@@ -368,15 +369,34 @@ static bool saveFormValues(FormValues* fv, char* resultBuffer, int bufferSize, i
     // Save WiFi
     if (DeviceConfig_IsSettingAvailable(SETTING_WIFI_SSID) && fv->ssid[0] != '\0')
     {
-        bool wifiOk = (DeviceConfig_Save(SETTING_WIFI_SSID, fv->ssid) == 0);
-        if (fv->password[0] != '\0')
+        // Validate WiFi settings
+        ValidationResult ssidResult = Validator_CheckLength(SETTING_WIFI_SSID, fv->ssid);
+        ValidationResult pwdResult = (fv->password[0] != '\0') 
+            ? Validator_CheckLength(SETTING_WIFI_PASSWORD, fv->password) 
+            : VALIDATE_OK;
+        
+        if (ssidResult != VALIDATE_OK || pwdResult != VALIDATE_OK)
         {
-            wifiOk = wifiOk && (DeviceConfig_Save(SETTING_WIFI_PASSWORD, fv->password) == 0);
+            const char* errMsg = (ssidResult != VALIDATE_OK) 
+                ? Validator_GetErrorMessage(ssidResult)
+                : Validator_GetErrorMessage(pwdResult);
+            ret = snprintf(&resultBuffer[*len], bufferSize - *len,
+                "<tr><td>Wi-Fi</td><td>%s</td></tr>", errMsg);
+            *len += (ret > 0 ? ret : 0);
+            success = false;
         }
-        ret = snprintf(&resultBuffer[*len], bufferSize - *len,
-            "<tr><td>Wi-Fi</td><td>%s</td></tr>", wifiOk ? "Saved" : "Failed");
-        *len += (ret > 0 ? ret : 0);
-        if (!wifiOk) success = false;
+        else
+        {
+            bool wifiOk = (DeviceConfig_Save(SETTING_WIFI_SSID, fv->ssid) == 0);
+            if (fv->password[0] != '\0')
+            {
+                wifiOk = wifiOk && (DeviceConfig_Save(SETTING_WIFI_PASSWORD, fv->password) == 0);
+            }
+            ret = snprintf(&resultBuffer[*len], bufferSize - *len,
+                "<tr><td>Wi-Fi</td><td>%s</td></tr>", wifiOk ? "Saved" : "Save failed");
+            *len += (ret > 0 ? ret : 0);
+            if (!wifiOk) success = false;
+        }
     }
     
     // Save all other fields (data-driven!)
@@ -401,10 +421,22 @@ static bool saveFormValues(FormValues* fv, char* resultBuffer, int bufferSize, i
             continue;
         }
         
+        // Validate before saving
+        ValidationResult validResult = Validator_ValidateSetting(setting, value);
+        if (validResult != VALIDATE_OK)
+        {
+            ret = snprintf(&resultBuffer[*len], bufferSize - *len,
+                "<tr><td>%s</td><td>%s</td></tr>",
+                SETTING_UI[i].label, Validator_GetErrorMessage(validResult));
+            *len += (ret > 0 ? ret : 0);
+            success = false;
+            continue;
+        }
+        
         bool saved = (DeviceConfig_Save(setting, value) == 0);
         ret = snprintf(&resultBuffer[*len], bufferSize - *len,
             "<tr><td>%s</td><td>%s</td></tr>",
-            SETTING_UI[i].label, saved ? "Saved" : "Failed");
+            SETTING_UI[i].label, saved ? "Saved" : "Save failed");
         *len += (ret > 0 ? ret : 0);
         if (!saved) success = false;
     }

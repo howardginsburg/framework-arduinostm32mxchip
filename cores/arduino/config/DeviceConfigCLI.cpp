@@ -4,6 +4,7 @@
 #include "DeviceConfigCLI.h"
 #include "DeviceConfig.h"
 #include "SettingUI.h"
+#include "SettingValidator.h"
 #include "UARTClass.h"
 #include <string.h>
 #include <stdlib.h>
@@ -102,18 +103,25 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         value = allocatedValue;
     }
     
-    // Validate length
-    int len = strlen(value);
-    int maxLen = DeviceConfig_GetMaxLen(meta->id);
-    if (len == 0 || len > maxLen)
+    // Validate using centralized validator
+    ValidationResult validResult = Validator_ValidateSetting(meta->id, value);
+    if (validResult != VALIDATE_OK)
     {
-        Serial.printf("ERROR: Invalid length. Max %d bytes, got %d\r\n", maxLen, len);
+        Serial.printf("ERROR: %s - %s\r\n", meta->label, Validator_GetErrorMessage(validResult));
+        
+        // Show additional details for specific errors
+        if (validResult == VALIDATE_ERROR_TOO_LONG)
+        {
+            int maxLen = DeviceConfig_GetMaxLen(meta->id);
+            Serial.printf("       Max %d bytes, got %d\r\n", maxLen, (int)strlen(value));
+        }
+        
         if (allocatedValue != NULL)
         {
             // Zero out memory for sensitive data before freeing
             if (SettingUI_IsSensitive(meta) || isCertOrKey)
             {
-                memset(allocatedValue, 0, len);
+                memset(allocatedValue, 0, strlen(allocatedValue));
             }
             free(allocatedValue);
         }
@@ -122,6 +130,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     
     // Save the setting
     int result = DeviceConfig_Save(meta->id, value);
+    int valueLen = strlen(value);
     
     // Clean up allocated memory
     if (allocatedValue != NULL)
@@ -129,7 +138,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         // Zero out memory for sensitive data before freeing
         if (SettingUI_IsSensitive(meta) || isCertOrKey)
         {
-            memset(allocatedValue, 0, len);
+            memset(allocatedValue, 0, valueLen);
         }
         free(allocatedValue);
     }
@@ -139,7 +148,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         Serial.printf("INFO: Set %s successfully", meta->label);
         if (isCertOrKey)
         {
-            Serial.printf(" (%d bytes)", len);
+            Serial.printf(" (%d bytes)", valueLen);
         }
         Serial.printf("\r\n");
     }

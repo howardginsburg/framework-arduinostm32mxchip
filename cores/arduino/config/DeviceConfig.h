@@ -47,12 +47,20 @@ typedef enum {
 } SettingID;
 
 /**
- * @brief Zone mapping structure
+ * @brief Maximum number of zones a setting can span
+ */
+#define MAX_ZONES_PER_SETTING 3
+
+/**
+ * @brief Zone mapping structure - supports multi-zone settings
+ * 
+ * For single-zone settings, only zones[0] and zoneSizes[0] are used.
+ * For multi-zone settings, data is written/read sequentially across zones.
+ * A zone index of 0xFF marks end of zone list.
  */
 typedef struct {
-    uint8_t zoneIndex;              // STSAFE zone index (0xFF = not available)
-    uint16_t maxLen;                // Maximum length for this setting
-    uint16_t offset;                // Offset within zone (0 for single zone, >0 for multi-zone)
+    uint8_t zones[MAX_ZONES_PER_SETTING];      // STSAFE zone indices (0xFF = unused/end)
+    uint16_t zoneSizes[MAX_ZONES_PER_SETTING]; // Size for each zone
 } ZoneMapping;
 
 /**
@@ -88,6 +96,13 @@ void DeviceConfig_Init(ConnectionProfile profile);
  * @return Profile name string
  */
 const char* DeviceConfig_GetProfileName(void);
+
+/**
+ * @brief Get the active connection profile type
+ * 
+ * @return Active ConnectionProfile enum value, or PROFILE_NONE if not initialized
+ */
+ConnectionProfile DeviceConfig_GetActiveProfile(void);
 
 /**
  * @brief Check if a setting is available in the active profile
