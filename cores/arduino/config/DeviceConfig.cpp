@@ -32,6 +32,29 @@ static const ProfileDefinition* s_activeProfile = NULL;
  * - Large certificates can span multiple zones
  */
 static const ProfileDefinition PROFILES[] = {
+    // PROFILE_NONE - No EEPROM usage, sketch provides configuration
+    {
+        PROFILE_NONE,
+        "None",
+        "No EEPROM storage - configuration provided by sketch code",
+        {
+            UNUSED_ZONE,            // SETTING_WIFI_SSID
+            UNUSED_ZONE,            // SETTING_WIFI_PASSWORD
+            UNUSED_ZONE,            // SETTING_BROKER_URL
+            UNUSED_ZONE,            // SETTING_DEVICE_ID
+            UNUSED_ZONE,            // SETTING_DEVICE_PASSWORD
+            UNUSED_ZONE,            // SETTING_CA_CERT
+            UNUSED_ZONE,            // SETTING_CLIENT_CERT
+            UNUSED_ZONE,            // SETTING_CLIENT_KEY
+            UNUSED_ZONE,            // SETTING_CONNECTION_STRING
+            UNUSED_ZONE,            // SETTING_DPS_ENDPOINT
+            UNUSED_ZONE,            // SETTING_SCOPE_ID
+            UNUSED_ZONE,            // SETTING_REGISTRATION_ID
+            UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
+            UNUSED_ZONE             // SETTING_DEVICE_CERT
+        }
+    },
+    
     // PROFILE_MQTT_USERPASS - Basic MQTT with username/password
     {
         PROFILE_MQTT_USERPASS,
@@ -498,4 +521,316 @@ int DeviceConfig_Read(SettingID setting, char* buffer, int bufferSize)
         }
         return result;
     }
+}
+
+// =============================================================================
+// Static buffers for loaded configuration
+// =============================================================================
+static char s_wifiSsid[ZONE_3_SIZE];
+static char s_wifiPassword[ZONE_10_SIZE];
+static char s_brokerUrl[ZONE_5_SIZE];
+static char s_brokerHost[ZONE_5_SIZE];
+static int  s_brokerPort = 8883;
+static char s_caCert[ZONE_0_SIZE + ZONE_7_SIZE + ZONE_8_SIZE];
+static char s_clientCert[ZONE_6_SIZE + ZONE_7_SIZE];
+static char s_clientKey[ZONE_8_SIZE];
+static char s_connectionString[ZONE_5_SIZE];
+static char s_deviceId[256];
+
+/**
+ * @brief Parse broker URL into host and port
+ * 
+ * Supports formats:
+ *   hostname
+ *   hostname:port
+ *   mqtts://hostname
+ *   mqtts://hostname:port
+ *   ssl://hostname:port
+ */
+static void parseBrokerUrl(const char* url)
+{
+    if (url == NULL || url[0] == '\0')
+    {
+        s_brokerHost[0] = '\0';
+        s_brokerPort = 8883;
+        return;
+    }
+    
+    const char* hostStart = url;
+    
+    // Skip protocol prefix if present
+    if (strncmp(url, "mqtts://", 8) == 0)
+    {
+        hostStart = url + 8;
+    }
+    else if (strncmp(url, "ssl://", 6) == 0)
+    {
+        hostStart = url + 6;
+    }
+    else if (strncmp(url, "mqtt://", 7) == 0)
+    {
+        hostStart = url + 7;
+        s_brokerPort = 1883;  // Default non-TLS port
+    }
+    
+    // Find port separator
+    const char* portSep = strchr(hostStart, ':');
+    
+    if (portSep != NULL)
+    {
+        // Copy host portion
+        int hostLen = portSep - hostStart;
+        if (hostLen >= (int)sizeof(s_brokerHost))
+        {
+            hostLen = sizeof(s_brokerHost) - 1;
+        }
+        strncpy(s_brokerHost, hostStart, hostLen);
+        s_brokerHost[hostLen] = '\0';
+        
+        // Parse port
+        s_brokerPort = atoi(portSep + 1);
+        if (s_brokerPort <= 0 || s_brokerPort > 65535)
+        {
+            s_brokerPort = 8883;
+        }
+    }
+    else
+    {
+        // No port specified, use default
+        strncpy(s_brokerHost, hostStart, sizeof(s_brokerHost) - 1);
+        s_brokerHost[sizeof(s_brokerHost) - 1] = '\0';
+    }
+}
+
+/**
+ * @brief Extract CN (Common Name) from a PEM certificate
+ * 
+ * Looks for "CN=" in the certificate subject and extracts the value.
+ * This is a simple text-based extraction that works for typical certs.
+ */
+static void extractCNFromCert(const char* cert, char* cnBuffer, int bufferSize)
+{
+    cnBuffer[0] = '\0';
+    
+    if (cert == NULL || cert[0] == '\0')
+    {
+        return;
+    }
+    
+    // Look for "CN=" pattern (could be after "/" or ", ")
+    const char* cnStart = strstr(cert, "CN=");
+    if (cnStart == NULL)
+    {
+        cnStart = strstr(cert, "cn=");
+    }
+    
+    if (cnStart != NULL)
+    {
+        cnStart += 3;  // Skip "CN="
+        
+        // Find end of CN value (terminated by '/', ',', '\n', '\r', or '"')
+        int i = 0;
+        while (cnStart[i] != '\0' && 
+               cnStart[i] != '/' && 
+               cnStart[i] != ',' && 
+               cnStart[i] != '\n' && 
+               cnStart[i] != '\r' &&
+               cnStart[i] != '"' &&
+               i < bufferSize - 1)
+        {
+            cnBuffer[i] = cnStart[i];
+            i++;
+        }
+        cnBuffer[i] = '\0';
+    }
+}
+
+/**
+ * @brief Extract DeviceId from an IoT Hub connection string
+ * 
+ * Connection string format:
+ * HostName=<hub>.azure-devices.net;DeviceId=<device>;SharedAccessKey=<key>
+ */
+static void extractDeviceIdFromConnectionString(const char* connStr, char* deviceId, int bufferSize)
+{
+    deviceId[0] = '\0';
+    
+    if (connStr == NULL || connStr[0] == '\0')
+    {
+        return;
+    }
+    
+    // Look for "DeviceId="
+    const char* start = strstr(connStr, "DeviceId=");
+    if (start == NULL)
+    {
+        start = strstr(connStr, "deviceId=");
+    }
+    
+    if (start != NULL)
+    {
+        start += 9;  // Skip "DeviceId="
+        
+        // Find end (terminated by ';' or end of string)
+        int i = 0;
+        while (start[i] != '\0' && start[i] != ';' && i < bufferSize - 1)
+        {
+            deviceId[i] = start[i];
+            i++;
+        }
+        deviceId[i] = '\0';
+    }
+}
+
+bool DeviceConfig_LoadAll(void)
+{
+    if (s_activeProfile == NULL)
+    {
+        return false;
+    }
+    
+    bool success = true;
+    
+    // Load WiFi SSID (required for all profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_WIFI_SSID))
+    {
+        if (DeviceConfig_Read(SETTING_WIFI_SSID, s_wifiSsid, sizeof(s_wifiSsid)) < 0)
+        {
+            s_wifiSsid[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load WiFi Password (required for all profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_WIFI_PASSWORD))
+    {
+        if (DeviceConfig_Read(SETTING_WIFI_PASSWORD, s_wifiPassword, sizeof(s_wifiPassword)) < 0)
+        {
+            s_wifiPassword[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load Broker URL (for MQTT profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_BROKER_URL))
+    {
+        if (DeviceConfig_Read(SETTING_BROKER_URL, s_brokerUrl, sizeof(s_brokerUrl)) >= 0)
+        {
+            parseBrokerUrl(s_brokerUrl);
+        }
+        else
+        {
+            s_brokerUrl[0] = '\0';
+            s_brokerHost[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load CA Certificate (for TLS profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_CA_CERT))
+    {
+        if (DeviceConfig_Read(SETTING_CA_CERT, s_caCert, sizeof(s_caCert)) < 0)
+        {
+            s_caCert[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load Client Certificate (for mTLS profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_CLIENT_CERT))
+    {
+        if (DeviceConfig_Read(SETTING_CLIENT_CERT, s_clientCert, sizeof(s_clientCert)) < 0)
+        {
+            s_clientCert[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load Client Private Key (for mTLS profiles)
+    if (DeviceConfig_IsSettingAvailable(SETTING_CLIENT_KEY))
+    {
+        if (DeviceConfig_Read(SETTING_CLIENT_KEY, s_clientKey, sizeof(s_clientKey)) < 0)
+        {
+            s_clientKey[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load Connection String (for IoT Hub SAS profile)
+    if (DeviceConfig_IsSettingAvailable(SETTING_CONNECTION_STRING))
+    {
+        if (DeviceConfig_Read(SETTING_CONNECTION_STRING, s_connectionString, sizeof(s_connectionString)) < 0)
+        {
+            s_connectionString[0] = '\0';
+            success = false;
+        }
+    }
+    
+    // Load/derive Device ID based on profile type
+    s_deviceId[0] = '\0';
+    if (s_activeProfile->profile == PROFILE_MQTT_MTLS || 
+        s_activeProfile->profile == PROFILE_IOTHUB_CERT ||
+        s_activeProfile->profile == PROFILE_DPS_CERT)
+    {
+        // Extract CN from client certificate
+        if (s_clientCert[0] != '\0')
+        {
+            extractCNFromCert(s_clientCert, s_deviceId, sizeof(s_deviceId));
+        }
+    }
+    else if (s_activeProfile->profile == PROFILE_IOTHUB_SAS)
+    {
+        // Extract DeviceId from connection string
+        if (s_connectionString[0] != '\0')
+        {
+            extractDeviceIdFromConnectionString(s_connectionString, s_deviceId, sizeof(s_deviceId));
+        }
+    }
+    else if (DeviceConfig_IsSettingAvailable(SETTING_DEVICE_ID))
+    {
+        // Read directly from EEPROM for username/password profiles
+        DeviceConfig_Read(SETTING_DEVICE_ID, s_deviceId, sizeof(s_deviceId));
+    }
+    
+    return success;
+}
+
+const char* DeviceConfig_GetWifiSsid(void)
+{
+    return s_wifiSsid;
+}
+
+const char* DeviceConfig_GetWifiPassword(void)
+{
+    return s_wifiPassword;
+}
+
+const char* DeviceConfig_GetBrokerHost(void)
+{
+    return s_brokerHost;
+}
+
+int DeviceConfig_GetBrokerPort(void)
+{
+    return s_brokerPort;
+}
+
+const char* DeviceConfig_GetCACert(void)
+{
+    return s_caCert;
+}
+
+const char* DeviceConfig_GetClientCert(void)
+{
+    return s_clientCert;
+}
+
+const char* DeviceConfig_GetClientKey(void)
+{
+    return s_clientKey;
+}
+
+const char* DeviceConfig_GetDeviceId(void)
+{
+    return s_deviceId;
 }

@@ -2,21 +2,21 @@
 // Licensed under the MIT license. 
 #include "Arduino.h"
 #include "app_httpd.h"
+#include "DeviceConfig.h"
 
 static bool (*_startup_web_server)(void) = NULL;
-static int settings = 0;
+static ConnectionProfile s_webProfile = PROFILE_NONE;
 
 static bool startupWebServer(void)
 {
-    int ret = httpd_server_start(settings);
-
-    return (ret == 0 ? true : false);
+    int ret = httpd_server_start(s_webProfile);
+    return (ret == 0);
 }
 
-void EnableSystemWeb(int extFunctions)
+void EnableSystemWeb(ConnectionProfile profile)
 {
     _startup_web_server = startupWebServer;
-    settings = extFunctions;
+    s_webProfile = profile;
 }
 
 void StartupSystemWeb(void)

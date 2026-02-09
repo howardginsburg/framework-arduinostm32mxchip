@@ -12,7 +12,11 @@
 #ifndef __DEVICE_CONFIG_DEFAULT_H__
 #define __DEVICE_CONFIG_DEFAULT_H__
 
-// Default to Azure IoT Hub with SAS authentication for backward compatibility
-#define CONNECTION_PROFILE PROFILE_IOTHUB_SAS
+// Default to no EEPROM usage - sketch must provide its own configuration
+// To use EEPROM-based configuration, create a device_config.h in your sketch
+// with CONNECTION_PROFILE set to one of:
+//   PROFILE_MQTT_USERPASS, PROFILE_MQTT_USERPASS_TLS, PROFILE_MQTT_MTLS,
+//   PROFILE_IOTHUB_SAS, PROFILE_IOTHUB_CERT, PROFILE_DPS_SAS, PROFILE_DPS_CERT
+#define CONNECTION_PROFILE PROFILE_NONE
 
 #endif /* __DEVICE_CONFIG_DEFAULT_H__ */

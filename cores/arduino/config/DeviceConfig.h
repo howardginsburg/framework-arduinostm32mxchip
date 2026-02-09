@@ -15,7 +15,8 @@ extern "C" {
  * @brief Connection profile types supported by the framework
  */
 typedef enum {
-    PROFILE_MQTT_USERPASS = 0,      // MQTT with username/password
+    PROFILE_NONE = 0,               // No EEPROM usage - configuration provided by sketch
+    PROFILE_MQTT_USERPASS,          // MQTT with username/password
     PROFILE_MQTT_USERPASS_TLS,      // MQTT with username/password over TLS (server CA cert)
     PROFILE_MQTT_MTLS,              // MQTT with mutual TLS (client cert + key + CA cert)
     PROFILE_IOTHUB_SAS,             // Azure IoT Hub with SAS key (connection string)
@@ -64,16 +65,14 @@ typedef struct {
     ZoneMapping mappings[SETTING_COUNT];
 } ProfileDefinition;
 
-// Check for user-provided device_config.h
+// Check for user-provided device_config.h to define CONNECTION_PROFILE
 #if __has_include("device_config.h")
     #include "device_config.h"
-#else
-    #include "device_config_default.h"
 #endif
 
-// Validate that CONNECTION_PROFILE is defined
+// Default to PROFILE_NONE if not defined
 #ifndef CONNECTION_PROFILE
-    #error "CONNECTION_PROFILE must be defined in device_config.h or device_config_default.h"
+    #define CONNECTION_PROFILE PROFILE_NONE
 #endif
 
 /**
@@ -124,6 +123,70 @@ int DeviceConfig_Save(SettingID setting, const char* value);
  * @return Number of bytes read on success, -1 on failure
  */
 int DeviceConfig_Read(SettingID setting, char* buffer, int bufferSize);
+
+/**
+ * @brief Load all configuration values from EEPROM into internal buffers
+ * 
+ * This function reads WiFi credentials, broker URL, and certificates
+ * (based on the active profile) into static buffers that can be accessed
+ * via the getter functions.
+ * 
+ * @return true if all required settings loaded successfully, false otherwise
+ */
+bool DeviceConfig_LoadAll(void);
+
+/**
+ * @brief Get WiFi SSID
+ * @return Pointer to WiFi SSID string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetWifiSsid(void);
+
+/**
+ * @brief Get WiFi password
+ * @return Pointer to WiFi password string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetWifiPassword(void);
+
+/**
+ * @brief Get broker/server host
+ * @return Pointer to broker host string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetBrokerHost(void);
+
+/**
+ * @brief Get broker/server port
+ * @return Port number (valid after DeviceConfig_LoadAll)
+ */
+int DeviceConfig_GetBrokerPort(void);
+
+/**
+ * @brief Get CA certificate
+ * @return Pointer to CA certificate string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetCACert(void);
+
+/**
+ * @brief Get client certificate
+ * @return Pointer to client certificate string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetClientCert(void);
+
+/**
+ * @brief Get client private key
+ * @return Pointer to client key string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetClientKey(void);
+
+/**
+ * @brief Get device ID
+ * 
+ * For mTLS profiles, this is extracted from the CN of the client certificate.
+ * For IoT Hub SAS profiles, this is extracted from the connection string.
+ * For other profiles, this may be read directly from EEPROM or be empty.
+ * 
+ * @return Pointer to device ID string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetDeviceId(void);
 
 #ifdef __cplusplus
 }
