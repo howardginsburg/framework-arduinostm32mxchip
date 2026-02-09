@@ -3,6 +3,7 @@
 
 #include "DeviceConfigCLI.h"
 #include "DeviceConfig.h"
+#include "SettingUI.h"
 #include "UARTClass.h"
 #include <string.h>
 #include <stdlib.h>
@@ -34,46 +35,18 @@ static void convert_escaped_newlines(char* str)
     *dst = '\0';
 }
 
-// Setting metadata for CLI commands
-typedef struct {
-    SettingID id;
-    const char* label;
-    const char* cmdName;
-    bool isPrivacy;
-} SettingMetadata;
-
-static const SettingMetadata SETTING_METADATA[] = {
-    {SETTING_WIFI_SSID, "WiFi SSID", "set_wifissid", false},
-    {SETTING_WIFI_PASSWORD, "WiFi Password", "set_wifipwd", true},
-    {SETTING_BROKER_URL, "MQTT Broker URL", "set_broker", false},
-    {SETTING_DEVICE_ID, "Device ID", "set_deviceid", false},
-    {SETTING_DEVICE_PASSWORD, "Device Password", "set_devicepwd", true},
-    {SETTING_CA_CERT, "CA Certificate", "set_cacert", false},
-    {SETTING_CLIENT_CERT, "Client Certificate", "set_clientcert", false},
-    {SETTING_CLIENT_KEY, "Client Private Key", "set_clientkey", true},
-    {SETTING_CONNECTION_STRING, "IoT Hub Connection String", "set_connstring", false},
-    {SETTING_DPS_ENDPOINT, "DPS Endpoint", "set_dps_endpoint", false},
-    {SETTING_SCOPE_ID, "DPS Scope ID", "set_scopeid", false},
-    {SETTING_REGISTRATION_ID, "DPS Registration ID", "set_regid", false},
-    {SETTING_SYMMETRIC_KEY, "DPS Symmetric Key", "set_symkey", true},
-    {SETTING_DEVICE_CERT, "Device Certificate", "set_devicecert", false}
-};
-
-static const int SETTING_METADATA_COUNT = sizeof(SETTING_METADATA) / sizeof(SettingMetadata);
-
 void config_print_help(void)
 {
     Serial.printf("Configuration commands for profile '%s':\r\n", DeviceConfig_GetProfileName());
     
-    for (int i = 0; i < SETTING_METADATA_COUNT; i++)
+    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
     {
-        if (DeviceConfig_IsSettingAvailable(SETTING_METADATA[i].id))
+        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
         {
-            int maxLen = DeviceConfig_GetMaxLen(SETTING_METADATA[i].id);
-            Serial.printf(" - %s <%s>: Set %s (max %d bytes)\r\n",
-                SETTING_METADATA[i].cmdName,
-                "value",
-                SETTING_METADATA[i].label,
+            int maxLen = DeviceConfig_GetMaxLen(SETTING_UI[i].id);
+            Serial.printf(" - %s <value>: Set %s (max %d bytes)\r\n",
+                SETTING_UI[i].cliCommand,
+                SETTING_UI[i].label,
                 maxLen);
         }
     }
@@ -87,15 +60,7 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     }
     
     // Find matching setting
-    const SettingMetadata* meta = NULL;
-    for (int i = 0; i < SETTING_METADATA_COUNT; i++)
-    {
-        if (strcmp(SETTING_METADATA[i].cmdName, cmdName) == 0)
-        {
-            meta = &SETTING_METADATA[i];
-            break;
-        }
-    }
+    const SettingUIMetadata* meta = SettingUI_FindByCliCommand(cmdName);
     
     if (meta == NULL)
     {
@@ -113,15 +78,12 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     // Check argument
     if (argc < 2 || argv[1] == NULL)
     {
-        Serial.printf("Usage: %s <value>\r\n", meta->cmdName);
+        Serial.printf("Usage: %s <value>\r\n", meta->cliCommand);
         return true;
     }
     
     // For certificate and key settings, we need to handle escaped newlines
-    bool isCertOrKey = (meta->id == SETTING_CA_CERT || 
-                        meta->id == SETTING_CLIENT_CERT || 
-                        meta->id == SETTING_CLIENT_KEY ||
-                        meta->id == SETTING_DEVICE_CERT);
+    bool isCertOrKey = SettingUI_IsMultiLine(meta);
     
     char* value = argv[1];
     char* allocatedValue = NULL;
@@ -148,8 +110,8 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         Serial.printf("ERROR: Invalid length. Max %d bytes, got %d\r\n", maxLen, len);
         if (allocatedValue != NULL)
         {
-            // Zero out memory for keys before freeing
-            if (meta->id == SETTING_CLIENT_KEY || meta->id == SETTING_SYMMETRIC_KEY)
+            // Zero out memory for sensitive data before freeing
+            if (SettingUI_IsSensitive(meta) || isCertOrKey)
             {
                 memset(allocatedValue, 0, len);
             }
@@ -164,8 +126,8 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     // Clean up allocated memory
     if (allocatedValue != NULL)
     {
-        // Zero out memory for keys before freeing
-        if (meta->id == SETTING_CLIENT_KEY || meta->id == SETTING_SYMMETRIC_KEY)
+        // Zero out memory for sensitive data before freeing
+        if (SettingUI_IsSensitive(meta) || isCertOrKey)
         {
             memset(allocatedValue, 0, len);
         }
@@ -191,20 +153,8 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
 
 bool config_is_privacy_command(const char* cmdName)
 {
-    if (cmdName == NULL)
-    {
-        return false;
-    }
-    
-    for (int i = 0; i < SETTING_METADATA_COUNT; i++)
-    {
-        if (strcmp(SETTING_METADATA[i].cmdName, cmdName) == 0)
-        {
-            return SETTING_METADATA[i].isPrivacy;
-        }
-    }
-    
-    return false;
+    const SettingUIMetadata* meta = SettingUI_FindByCliCommand(cmdName);
+    return SettingUI_IsSensitive(meta);
 }
 
 void config_show_status(void)
@@ -212,24 +162,22 @@ void config_show_status(void)
     Serial.printf("Configuration Status (Profile: %s):\r\n", DeviceConfig_GetProfileName());
     Serial.printf("================================\r\n");
     
-    for (int i = 0; i < SETTING_METADATA_COUNT; i++)
+    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
     {
-        if (DeviceConfig_IsSettingAvailable(SETTING_METADATA[i].id))
+        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
         {
             char buffer[64];
-            int result = DeviceConfig_Read(SETTING_METADATA[i].id, buffer, sizeof(buffer));
+            int result = DeviceConfig_Read(SETTING_UI[i].id, buffer, sizeof(buffer));
             
-            Serial.printf("%s: ", SETTING_METADATA[i].label);
+            Serial.printf("%s: ", SETTING_UI[i].label);
             
             if (result > 0 && buffer[0] != '\0')
             {
-                if (SETTING_METADATA[i].isPrivacy)
+                if (SettingUI_IsSensitive(&SETTING_UI[i]))
                 {
                     Serial.printf("SET (hidden)\r\n");
                 }
-                else if (SETTING_METADATA[i].id == SETTING_CA_CERT || 
-                         SETTING_METADATA[i].id == SETTING_CLIENT_CERT ||
-                         SETTING_METADATA[i].id == SETTING_DEVICE_CERT)
+                else if (SettingUI_IsMultiLine(&SETTING_UI[i]))
                 {
                     Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
                 }
