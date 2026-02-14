@@ -8,6 +8,7 @@
 #include "NTPClient.h"
 #include "SystemWiFi.h"
 #include "SystemTime.h"
+#include "DeviceConfig.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // WiFi related functions
@@ -26,30 +27,21 @@ bool InitSystemWiFi(void)
 
 bool SystemWiFiConnect(void)
 {
-    EEPROMInterface eeprom;
+    const char* wifiSsid = DeviceConfig_GetWifiSsid();
+    const char* wifiPwd = DeviceConfig_GetWifiPassword();
     
-    uint8_t pwd[WIFI_PWD_MAX_LEN + 1] = { '\0' };
-    
-    int ret = eeprom.read((uint8_t*)ssid, WIFI_SSID_MAX_LEN, 0x00, WIFI_SSID_ZONE_IDX);
-    if (ret < 0)
-    {
-        Serial.print("ERROR: Failed to get the Wi-Fi SSID from EEPROM.\r\n");
-        return false;
-    }
-    else if(ret == 0)
+    if (wifiSsid == NULL || wifiSsid[0] == '\0')
     {
         Serial.print("INFO: the Wi-Fi SSID is empty, please set the value in configuration mode.\r\n");
         return false;
     }
-    ret = eeprom.read(pwd, WIFI_PWD_MAX_LEN, 0x00, WIFI_PWD_ZONE_IDX);
-    if (ret < 0)
-    {
-        Serial.print("ERROR: Failed to get the Wi-Fi password from EEPROM.\r\n");
-        return false;
-    }
+    
+    // Copy to local ssid for SystemWiFiSSID()
+    strncpy(ssid, wifiSsid, WIFI_SSID_MAX_LEN);
+    ssid[WIFI_SSID_MAX_LEN] = '\0';
 
     ((EMW10xxInterface*)_defaultSystemNetwork)->set_interface(Station);
-    ret = ((EMW10xxInterface*)_defaultSystemNetwork)->connect( (char*)ssid, (char*)pwd, NSAPI_SECURITY_WPA_WPA2, 0 );
+    int ret = ((EMW10xxInterface*)_defaultSystemNetwork)->connect((char*)wifiSsid, wifiPwd, NSAPI_SECURITY_WPA_WPA2, 0);
     if(ret != 0)
     {
       	Serial.printf("ERROR: Failed to connect Wi-Fi %s.\r\n", ssid);

@@ -10,12 +10,17 @@
 extern "C"{
 #endif  // __cplusplus
 
-#define WEB_SETTING_IOT_DEVICE_CONN_STRING  0x00000001
-#define WEB_SETTING_IOT_CERT                0x00000002
-#define WEB_SETTING_IOT_DPS_SYMMETRIC_KEY   0x00000004
+/**
+ * @brief Enable the web configuration UI
+ * 
+ * The web UI will dynamically show configuration fields based on
+ * what settings are available in the active profile (set by DeviceConfig_Init).
+ */
+void EnableSystemWeb(void);
 
-void EnableSystemWeb(int extFunctions);
-
+/**
+ * @brief Start the web configuration server
+ */
 void StartupSystemWeb(void);
 
 #ifdef __cplusplus

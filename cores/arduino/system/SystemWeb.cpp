@@ -4,19 +4,16 @@
 #include "app_httpd.h"
 
 static bool (*_startup_web_server)(void) = NULL;
-static int settings = 0;
 
 static bool startupWebServer(void)
 {
-    int ret = httpd_server_start(settings);
-
-    return (ret == 0 ? true : false);
+    int ret = httpd_server_start();
+    return (ret == 0);
 }
 
-void EnableSystemWeb(int extFunctions)
+void EnableSystemWeb(void)
 {
     _startup_web_server = startupWebServer;
-    settings = extFunctions;
 }
 
 void StartupSystemWeb(void)

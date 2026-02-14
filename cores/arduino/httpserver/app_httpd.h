@@ -2,10 +2,10 @@
  ******************************************************************************
  * @file    app_httpd.h
  * @author  QQ DING
- * @version V1.0.0
- * @date    1-September-2015
- * @brief   This header contains function prototypes called by httpd protocol
- *          operations
+ * @version V2.0.0
+ * @date    8-February-2026
+ * @brief   This header contains function prototypes for the web-based device
+ *          configuration UI. Updated to use DeviceConfig profiles.
  ******************************************************************************
  *
  *  The MIT License
@@ -31,17 +31,36 @@
  ******************************************************************************
  */
 
+#ifndef __APP_HTTPD_H__
+#define __APP_HTTPD_H__
+
 #include "WiFiAccessPoint.h"
+#include "DeviceConfig.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-int httpd_server_start(int settings);
+/**
+ * @brief Start the HTTP server
+ * 
+ * The web UI will dynamically show configuration fields based on
+ * what settings are available in the active profile (set by DeviceConfig_Init).
+ * 
+ * @return 0 on success, error code on failure
+ */
+int httpd_server_start(void);
 
-int app_httpd_stop();
+/**
+ * @brief Stop the HTTP server
+ * 
+ * @return 0 on success, error code on failure
+ */
+int app_httpd_stop(void);
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif // __APP_HTTPD_H__

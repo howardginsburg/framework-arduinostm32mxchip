@@ -11,6 +11,8 @@
 #include "SystemTickCounter.h"
 #include "SystemWeb.h"
 #include "SystemWiFi.h"
+#include "config/DeviceConfig.h"
+#include "../../../libraries/Sensors/src/SensorManager.h"
 
 static bool Initialization(void)
 {
@@ -55,6 +57,9 @@ static bool Initialization(void)
     _red.write(0.0f);
     _green.write(0.0f);
     _blue.write(0.0f);
+
+    // Initialize all onboard sensors
+    Sensors.init();
 
     return true;
 }
@@ -135,8 +140,8 @@ extern void start_arduino(void);
 
 static void EnterUserMode()
 {
-    //Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
-    Serial.print("Press Button A and reset to enter configuration mode.\r\n");
+    Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
+    //Serial.print("Press Button A and reset to enter configuration mode.\r\n");
 
     start_arduino();
 
@@ -150,6 +155,12 @@ static void EnterUserMode()
 int main(void)
 {
     Initialization();
+    
+    // Initialize device configuration system with the profile selected at compile time
+    DeviceConfig_Init(CONNECTION_PROFILE);
+    
+    // Load all configuration values from EEPROM into internal buffers
+    DeviceConfig_LoadAll();
 
     __sys_setup();
 
@@ -157,10 +168,10 @@ int main(void)
     {
         EnterConfigurationMode();
     }
-    //else if (IsAPMode())
-    //{
-    //    EnterAPMode();
-    //}
+    else if (IsAPMode())
+    {
+        EnterAPMode();
+    }
     else
     {
         EnterUserMode();

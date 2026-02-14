@@ -9,12 +9,13 @@
 #include "SystemVersion.h"
 #include "UARTClass.h"
 #include "console_cli.h"
+#include "config/DeviceConfig.h"
+#include "config/DeviceConfigCLI.h"
 
 struct console_command 
 {
     const char *name;
     const char *help;
-    bool       isPrivacy;
     void (*function) (int argc, char **argv);
 };
 
@@ -41,44 +42,16 @@ static void help_command(int argc, char **argv);
 static void get_version_command(int argc, char **argv);
 static void reboot_and_exit_command(int argc, char **argv);
 static void wifi_scan(int argc, char **argv);
-static void wifi_ssid_command(int argc, char **argv);
-static void wifi_pwd_Command(int argc, char **argv);
-static void az_iothub_command(int argc, char **argv);
-static void dps_uds_command(int argc, char **argv);
-static void az_iotdps_command(int argc, char **argv);
 static void enable_secure_command(int argc, char **argv);
-
-// MQTT commands
-static void mqtt_command(int argc, char **argv);
-static void deviceid_command(int argc, char **argv);
-static void device_pwd_command(int argc, char **argv);
-
-// Certificate commands
-static void set_cacert_command(int argc, char **argv);
-static void set_clientcert_command(int argc, char **argv);
-static void set_clientkey_command(int argc, char **argv);
-static void show_cert_status_command(int argc, char **argv);
+static void status_command(int argc, char **argv);
 
 static const struct console_command cmds[] = {
-  {"help",          "Help document",                                                                                                                    false, help_command},
-  {"version",       "System version",                                                                                                                   false, get_version_command},
-  {"exit",          "Exit and reboot",                                                                                                                  false, reboot_and_exit_command},
-  {"scan",          "Scan Wi-Fi AP",                                                                                                                    false, wifi_scan},
-  {"set_wifissid",  "Set Wi-Fi SSID",                                                                                                                   false, wifi_ssid_command},
-  {"set_wifipwd",   "Set Wi-Fi password",                                                                                                               false, wifi_pwd_Command},
-  {"set_az_iothub", "Set IoT Hub device connection string",                                                                                             false, az_iothub_command},
-  {"set_dps_uds",   "Set DPS Unique Device Secret (UDS) for X.509 certificates",                                                                       false, dps_uds_command},
-  {"set_az_iotdps", "Set DPS Symmetric Key. Format: \"DPSEndpoint=global.azure-devices-provisioning.net;IdScope=XXX;DeviceId=XXX;SymmetricKey=XXX\"",   false, az_iotdps_command},
-  // MQTT commands
-  {"set_mqtt",      "Set MQTT url or ip address",                                                     false, mqtt_command},
-  {"set_deviceid",  "The deviceid (and clientid) to be used when connecting to the broker",          false, deviceid_command},
-  {"set_device_pwd","The device password.  Make sure to set this even if it's just garbage data",    false, device_pwd_command},
-  // Certificate commands
-  {"set_cacert",    "Set CA certificate (PEM format, use \\n for newlines)",                          false, set_cacert_command},
-  {"set_clientcert","Set client certificate for mutual TLS (PEM format)",                            false, set_clientcert_command},
-  {"set_clientkey", "Set client private key for mutual TLS (PEM format)",                             true,  set_clientkey_command},
-  {"cert_status",   "Show certificate storage status",                                                false, show_cert_status_command},
-  {"enable_secure", "Enable secure channel between AZ3166 and secure chip",                                                                             false, enable_secure_command},
+  {"help",          "Help document",                                             help_command},
+  {"version",       "System version",                                            get_version_command},
+  {"exit",          "Exit and reboot",                                           reboot_and_exit_command},
+  {"scan",          "Scan Wi-Fi AP",                                             wifi_scan},
+  {"status",        "Show configuration status",                                 status_command},
+  {"enable_secure", "Enable secure channel between AZ3166 and secure chip",      enable_secure_command},
 };
 
 static const int cmd_count = sizeof(cmds) / sizeof(struct console_command);
@@ -88,11 +61,16 @@ static const int cmd_count = sizeof(cmds) / sizeof(struct console_command);
 static void print_help()
 {
     Serial.print("Configuration console:\r\n");
+    Serial.printf("Active profile: %s\r\n\r\n", DeviceConfig_GetProfileName());
     
+    Serial.print("System commands:\r\n");
     for (int i = 0; i < cmd_count; i++)
     {
         Serial.printf(" - %s: %s.\r\n", cmds[i].name, cmds[i].help);
     }
+    
+    Serial.print("\r\n");
+    config_print_help();
 }
 
 static void help_command(int argc, char **argv)
@@ -147,412 +125,9 @@ static void reboot_and_exit_command(int argc, char **argv)
     mico_system_reboot();
 }
 
-static int write_eeprom(char* string, int idxZone)
-{    
-    EEPROMInterface eeprom;
-    int len = strlen(string) + 1;
-    
-    // Write data to EEPROM
-    int result = eeprom.write((uint8_t*)string, len, idxZone);
-    if (result != 0)
-    {
-        Serial.printf("ERROR: Failed to write EEPROM: 0x%02x.\r\n", idxZone);
-        return -1;
-    }
-    
-    // Verify
-    uint8_t *pBuff = (uint8_t*)malloc(len);
-    result = eeprom.read(pBuff, len, 0x00, idxZone);
-    if (result != len || strncmp(string, (char*)pBuff, len) != 0)
-    {
-        Serial.printf("ERROR: Verify failed.\r\n");
-        return -1;
-    }
-    free(pBuff);
-    return 0;
-}
-
-static void wifi_ssid_command(int argc, char **argv)
+static void status_command(int argc, char **argv)
 {
-    if (argc == 1 || argv[1] == NULL) 
-    {
-        Serial.printf("Usage: set_wifissid <SSID>. Please provide the SSID of the Wi-Fi.\r\n");
-        return;
-    }
-    int len = strlen(argv[1]) + 1;
-    if (len == 0 || len > WIFI_SSID_MAX_LEN)
-    {
-        Serial.printf("Invalid Wi-Fi SSID.\r\n");
-        return;
-    }
-    
-    int result = write_eeprom(argv[1], WIFI_SSID_ZONE_IDX);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set Wi-Fi SSID successfully.\r\n");
-    }
-}
-
-static void wifi_pwd_Command(int argc, char **argv)
-{
-    const char *pwd = NULL;
-    if (argc == 1)
-    {
-        // Clean the pwd
-        pwd = "";
-    }
-    else
-    {
-        if (argv[1] == NULL) 
-        {
-            Serial.printf("Usage: set_wifipwd [password]. Please provide the password of the Wi-Fi.\r\n");
-            return;
-        }
-        int len = strlen(argv[1]) + 1;
-        if (len > WIFI_PWD_MAX_LEN)
-        {
-            Serial.printf("Invalid Wi-Fi password.\r\n");
-        }
-        pwd = argv[1];
-    }
-        
-    int result = write_eeprom((char*)pwd, WIFI_PWD_ZONE_IDX);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set Wi-Fi password successfully.\r\n");
-    }
-}
-
-static void az_iothub_command(int argc, char **argv)
-{
-    if (argc == 1 || argv[1] == NULL) 
-    {
-        Serial.printf("Usage: set_az_iothub <connection string>. Please provide the connection string of the Azure IoT hub.\r\n");
-        return;
-    }
-    int len = strlen(argv[1]) + 1;
-    if (len == 0 || len > AZ_IOT_HUB_MAX_LEN)
-    {
-        Serial.printf("Invalid Azure IoT hub connection string.\r\n");
-        return;
-    }
-    
-    int result = write_eeprom(argv[1], AZ_IOT_HUB_ZONE_IDX);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set Azure Iot hub connection string successfully.\r\n");
-    }
-}
-
-static void dps_uds_command(int argc, char **argv)
-{
-    char* uds = NULL;
-    if (argc == 1 || argv[1] == NULL)
-    {
-        Serial.printf("Usage: set_dps_uds [uds]. Please provide the UDS for DPS.\r\n");
-        return;
-    }
-
-    int len = strlen(argv[1]) + 1;
-    if (len != DPS_UDS_MAX_LEN)
-    {
-        Serial.printf("Invalid UDS.\r\n");
-    }
-    uds = argv[1];
-        
-    int result = write_eeprom(uds, DPS_UDS_ZONE_IDX);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set DPS UDS successfully.\r\n");
-    }
-}
-
-static void az_iotdps_command(int argc, char **argv)
-{
-    if (argc == 1 || argv[1] == NULL) 
-    {
-        Serial.printf("Usage: set_az_iotdps <connection string>. Please provide the connection string of DPS.\r\n");
-        return;
-    }
-    int len = strlen(argv[1]) + 1;
-    if (len == 0 || len > AZ_IOT_HUB_MAX_LEN)
-    {
-        Serial.printf("Invalid DPS connection string.\r\n");
-        return;
-    }
-
-    int result = write_eeprom(argv[1], AZ_IOT_HUB_ZONE_IDX);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set DPS connection string successfully.\r\n");
-    }
-}
-
-static void mqtt_command(int argc, char **argv)
-{
-    if (argc == 1 || argv[1] == NULL) 
-    {
-        Serial.printf("Usage: set_mqtt <url or ip address>.\r\n");
-        return;
-    }
-    int len = strlen(argv[1]) + 1;
-    if (len == 0 || len > MQTT_MAX_LEN)
-    {
-        Serial.printf("Invalid mqtt address string.\r\n");
-        return;
-    }
-    
-    EEPROMInterface eeprom;
-    int result = eeprom.saveMQTTAddress(argv[1]);
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set mqtt connection string successfully.\r\n");
-    }
-    else
-    {
-        Serial.printf("ERROR: Set mqtt connection string failed.\r\n");
-    }
-}
-
-static void deviceid_command(int argc, char **argv)
-{
-    EEPROMInterface eeprom;
-    int result = eeprom.saveDeviceID(argv[1]);
-        
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set device id successfully.\r\n");
-    }
-    else
-    {
-        Serial.printf("ERROR: Set device id failed.\r\n");
-    }
-}
-
-static void device_pwd_command(int argc, char **argv)
-{
-    EEPROMInterface eeprom;
-    int result = eeprom.saveDevicePassword(argv[1]);
-    
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set device password successfully.\r\n");
-    }
-    else
-    {
-        Serial.printf("ERROR: Set device password failed.\r\n");
-    }
-}
-
-// Helper function to convert escaped newlines to actual newlines
-static void convert_escaped_newlines(char* str)
-{
-    if (str == NULL) return;
-    
-    char* src = str;
-    char* dst = str;
-    
-    while (*src)
-    {
-        if (*src == '\\' && *(src + 1) == 'n')
-        {
-            *dst = '\n';
-            src += 2;
-        }
-        else
-        {
-            *dst = *src;
-            src++;
-        }
-        dst++;
-    }
-    *dst = '\0';
-}
-
-static void set_cacert_command(int argc, char **argv)
-{
-    if (argc < 2 || argv[1] == NULL)
-    {
-        Serial.printf("Usage: set_cacert \"<PEM certificate>\"\r\n");
-        Serial.printf("  Use \\n for newlines, e.g.:\r\n");
-        Serial.printf("  set_cacert \"-----BEGIN CERTIFICATE-----\\nMIID...\\n-----END CERTIFICATE-----\\n\"\r\n");
-        Serial.printf("  Max size: %d bytes\r\n", AZ_IOT_X509_MAX_LEN);
-        return;
-    }
-    
-    // Make a copy and convert escaped newlines
-    char* cert = (char*)malloc(strlen(argv[1]) + 1);
-    if (cert == NULL)
-    {
-        Serial.printf("ERROR: Out of memory.\r\n");
-        return;
-    }
-    strcpy(cert, argv[1]);
-    convert_escaped_newlines(cert);
-    
-    int len = strlen(cert);
-    if (len == 0 || len > AZ_IOT_X509_MAX_LEN)
-    {
-        Serial.printf("ERROR: Certificate too large. Max %d bytes, got %d.\r\n", AZ_IOT_X509_MAX_LEN, len);
-        free(cert);
-        return;
-    }
-    
-    EEPROMInterface eeprom;
-    int result = eeprom.saveX509Cert(cert);
-    free(cert);
-    
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set CA certificate successfully (%d bytes).\r\n", len);
-    }
-    else
-    {
-        Serial.printf("ERROR: Failed to save CA certificate.\r\n");
-    }
-}
-
-static void set_clientcert_command(int argc, char **argv)
-{
-    if (argc < 2 || argv[1] == NULL)
-    {
-        Serial.printf("Usage: set_clientcert \"<PEM certificate>\"\r\n");
-        Serial.printf("  Use \\n for newlines.\r\n");
-        Serial.printf("  Max size: %d bytes\r\n", CLIENT_CERT_MAX_LEN);
-        return;
-    }
-    
-    char* cert = (char*)malloc(strlen(argv[1]) + 1);
-    if (cert == NULL)
-    {
-        Serial.printf("ERROR: Out of memory.\r\n");
-        return;
-    }
-    strcpy(cert, argv[1]);
-    convert_escaped_newlines(cert);
-    
-    int len = strlen(cert);
-    if (len == 0 || len > CLIENT_CERT_MAX_LEN)
-    {
-        Serial.printf("ERROR: Certificate too large. Max %d bytes, got %d.\r\n", CLIENT_CERT_MAX_LEN, len);
-        free(cert);
-        return;
-    }
-    
-    EEPROMInterface eeprom;
-    int result = eeprom.saveClientCert(cert);
-    free(cert);
-    
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set client certificate successfully (%d bytes).\r\n", len);
-    }
-    else
-    {
-        Serial.printf("ERROR: Failed to save client certificate.\r\n");
-    }
-}
-
-static void set_clientkey_command(int argc, char **argv)
-{
-    if (argc < 2 || argv[1] == NULL)
-    {
-        Serial.printf("Usage: set_clientkey \"<PEM private key>\"\r\n");
-        Serial.printf("  Use \\n for newlines.\r\n");
-        Serial.printf("  Max size: %d bytes\r\n", CLIENT_KEY_MAX_LEN);
-        Serial.printf("  WARNING: For security, enable secure channel first!\r\n");
-        return;
-    }
-    
-    char* key = (char*)malloc(strlen(argv[1]) + 1);
-    if (key == NULL)
-    {
-        Serial.printf("ERROR: Out of memory.\r\n");
-        return;
-    }
-    strcpy(key, argv[1]);
-    convert_escaped_newlines(key);
-    
-    int len = strlen(key);
-    if (len == 0 || len > CLIENT_KEY_MAX_LEN)
-    {
-        Serial.printf("ERROR: Key too large. Max %d bytes, got %d.\r\n", CLIENT_KEY_MAX_LEN, len);
-        free(key);
-        return;
-    }
-    
-    EEPROMInterface eeprom;
-    int result = eeprom.saveClientKey(key);
-    
-    // Zero out the key from memory for security
-    memset(key, 0, len);
-    free(key);
-    
-    if (result == 0)
-    {
-        Serial.printf("INFO: Set client private key successfully (%d bytes).\r\n", len);
-    }
-    else
-    {
-        Serial.printf("ERROR: Failed to save client private key.\r\n");
-    }
-}
-
-static void show_cert_status_command(int argc, char **argv)
-{
-    EEPROMInterface eeprom;
-    char buffer[64];
-    
-    Serial.printf("Certificate Storage Status:\r\n");
-    Serial.printf("  CA Certificate (max %d bytes): ", AZ_IOT_X509_MAX_LEN);
-    if (eeprom.readX509Cert(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
-    {
-        Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
-    }
-    else
-    {
-        Serial.printf("NOT SET\r\n");
-    }
-    
-    Serial.printf("  Client Certificate (max %d bytes): ", CLIENT_CERT_MAX_LEN);
-    if (eeprom.readClientCert(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
-    {
-        Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
-    }
-    else
-    {
-        Serial.printf("NOT SET\r\n");
-    }
-    
-    Serial.printf("  Client Private Key (max %d bytes): ", CLIENT_KEY_MAX_LEN);
-    if (eeprom.readClientKey(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
-    {
-        Serial.printf("SET (hidden)\r\n");
-    }
-    else
-    {
-        Serial.printf("NOT SET\r\n");
-    }
-    
-    Serial.printf("  MQTT Address (max %d bytes): ", MQTT_MAX_LEN);
-    if (eeprom.readMQTTAddress(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
-    {
-        Serial.printf("%s\r\n", buffer);
-    }
-    else
-    {
-        Serial.printf("NOT SET\r\n");
-    }
-    
-    Serial.printf("  Device ID (max %d bytes): ", DEVICE_ID_MAX_LEN);
-    if (eeprom.readDeviceID(buffer, sizeof(buffer)) == 0 && buffer[0] != '\0')
-    {
-        Serial.printf("%s\r\n", buffer);
-    }
-    else
-    {
-        Serial.printf("NOT SET\r\n");
-    }
+    config_show_status();
 }
 
 static void enable_secure_command(int argc, char **argv)
@@ -619,35 +194,6 @@ static void enable_secure_command(int argc, char **argv)
 }
 ////////////////////////////////////////////////////////////////////////////////////
 // Console app
-static bool is_privacy_cmd(char *inbuf, unsigned int bp)
-{
-    // Check privacy mode
-    char cmdName[INBUF_SIZE];
-    for(unsigned int j = 0; j < bp; j++)
-    {
-        if (inbuf[j] == SPACE_CHAR)
-        {
-            // Check the table
-            cmdName[j] = 0;
-            for(int i = 0; i < cmd_count; i++)
-            {
-                if(strcmp(cmds[i].name, cmdName) == 0)
-                {
-                    // It's privacy command
-                    return cmds[i].isPrivacy;
-                }
-            }
-            break;
-        }
-        else
-        {
-            cmdName[j] = inbuf[j];
-        }
-    }
-    
-    return false;
-}
-
 static bool get_input(char *inbuf, unsigned int *bp)
 {
     if (inbuf == NULL) 
@@ -692,14 +238,7 @@ static bool get_input(char *inbuf, unsigned int *bp)
         }
 
         // Echo
-        if (!is_privacy_cmd(inbuf, *bp))
-        {
-            Serial.write(inbuf[*bp]);
-        }
-        else
-        {
-            Serial.write('*');
-        }
+        Serial.write(inbuf[*bp]);
         (*bp)++;
         
         if (*bp >= INBUF_SIZE) 
@@ -810,6 +349,7 @@ static int handle_input(char* inbuf)
     
     Serial.printf("\r\n");
     
+    // Try system commands first
     for(int i = 0; i < cmd_count; i++)
     {
         if(strcmp(cmds[i].name, argv[0]) == 0)
@@ -817,6 +357,12 @@ static int handle_input(char* inbuf)
             cmds[i].function(argc, argv);
             return 0;
         }
+    }
+    
+    // Try config commands
+    if (config_dispatch_command(argv[0], argc, argv))
+    {
+        return 0;
     }
     
     Serial.printf("Error:Invalid command: %s\r\n", argv[0]);
