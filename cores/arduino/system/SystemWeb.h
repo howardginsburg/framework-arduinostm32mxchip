@@ -5,21 +5,18 @@
 #define __SYSTEM_WEB_H__
 
 #include "mbed.h"
-#include "DeviceConfig.h"
 
 #ifdef __cplusplus
 extern "C"{
 #endif  // __cplusplus
 
 /**
- * @brief Enable the web configuration UI with a connection profile
+ * @brief Enable the web configuration UI
  * 
  * The web UI will dynamically show configuration fields based on
- * what settings are available in the specified profile.
- * 
- * @param profile ConnectionProfile to configure for (from DeviceConfig.h)
+ * what settings are available in the active profile (set by DeviceConfig_Init).
  */
-void EnableSystemWeb(ConnectionProfile profile);
+void EnableSystemWeb(void);
 
 /**
  * @brief Start the web configuration server

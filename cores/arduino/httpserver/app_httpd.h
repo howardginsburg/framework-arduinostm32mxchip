@@ -43,15 +43,14 @@ extern "C"
 #endif
 
 /**
- * @brief Start the HTTP server with a connection profile
+ * @brief Start the HTTP server
  * 
  * The web UI will dynamically show configuration fields based on
- * what settings are available in the specified profile.
+ * what settings are available in the active profile (set by DeviceConfig_Init).
  * 
- * @param profile ConnectionProfile to configure for
  * @return 0 on success, error code on failure
  */
-int httpd_server_start(ConnectionProfile profile);
+int httpd_server_start(void);
 
 /**
  * @brief Stop the HTTP server

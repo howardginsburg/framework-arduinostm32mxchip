@@ -16,7 +16,6 @@ struct console_command
 {
     const char *name;
     const char *help;
-    bool       isPrivacy;
     void (*function) (int argc, char **argv);
 };
 
@@ -47,12 +46,12 @@ static void enable_secure_command(int argc, char **argv);
 static void status_command(int argc, char **argv);
 
 static const struct console_command cmds[] = {
-  {"help",          "Help document",                                             false, help_command},
-  {"version",       "System version",                                            false, get_version_command},
-  {"exit",          "Exit and reboot",                                           false, reboot_and_exit_command},
-  {"scan",          "Scan Wi-Fi AP",                                             false, wifi_scan},
-  {"status",        "Show configuration status",                                 false, status_command},
-  {"enable_secure", "Enable secure channel between AZ3166 and secure chip",      false, enable_secure_command},
+  {"help",          "Help document",                                             help_command},
+  {"version",       "System version",                                            get_version_command},
+  {"exit",          "Exit and reboot",                                           reboot_and_exit_command},
+  {"scan",          "Scan Wi-Fi AP",                                             wifi_scan},
+  {"status",        "Show configuration status",                                 status_command},
+  {"enable_secure", "Enable secure channel between AZ3166 and secure chip",      enable_secure_command},
 };
 
 static const int cmd_count = sizeof(cmds) / sizeof(struct console_command);
@@ -195,36 +194,6 @@ static void enable_secure_command(int argc, char **argv)
 }
 ////////////////////////////////////////////////////////////////////////////////////
 // Console app
-static bool is_privacy_cmd(char *inbuf, unsigned int bp)
-{
-    // Check privacy mode
-    char cmdName[INBUF_SIZE];
-    for(unsigned int j = 0; j < bp; j++)
-    {
-        if (inbuf[j] == SPACE_CHAR)
-        {
-            // Check the system commands table first
-            cmdName[j] = 0;
-            for(int i = 0; i < cmd_count; i++)
-            {
-                if(strcmp(cmds[i].name, cmdName) == 0)
-                {
-                    return cmds[i].isPrivacy;
-                }
-            }
-            
-            // Check config commands
-            return config_is_privacy_command(cmdName);
-        }
-        else
-        {
-            cmdName[j] = inbuf[j];
-        }
-    }
-    
-    return false;
-}
-
 static bool get_input(char *inbuf, unsigned int *bp)
 {
     if (inbuf == NULL) 
@@ -269,14 +238,7 @@ static bool get_input(char *inbuf, unsigned int *bp)
         }
 
         // Echo
-        if (!is_privacy_cmd(inbuf, *bp))
-        {
-            Serial.write(inbuf[*bp]);
-        }
-        else
-        {
-            Serial.write('*');
-        }
+        Serial.write(inbuf[*bp]);
         (*bp)++;
         
         if (*bp >= INBUF_SIZE) 

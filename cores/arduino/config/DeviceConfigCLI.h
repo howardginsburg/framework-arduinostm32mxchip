@@ -26,14 +26,6 @@ void config_print_help(void);
 bool config_dispatch_command(const char* cmdName, int argc, char** argv);
 
 /**
- * @brief Check if a command is privacy-sensitive (password, key)
- * 
- * @param cmdName Command name
- * @return true if command requires privacy mode (masked input)
- */
-bool config_is_privacy_command(const char* cmdName);
-
-/**
  * @brief Show configuration status for all settings in the active profile
  */
 void config_show_status(void);

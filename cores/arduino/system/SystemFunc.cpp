@@ -19,6 +19,5 @@ void SystemStandby(int timeout)
 
 WEAK void __sys_setup(void)
 {
-    // Default only enable wifi setting
-    EnableSystemWeb(PROFILE_NONE);
+    EnableSystemWeb();
 }

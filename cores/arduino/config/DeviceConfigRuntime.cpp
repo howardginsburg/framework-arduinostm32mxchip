@@ -12,6 +12,7 @@
 
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
+#include "mbedtls/x509_crt.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -104,8 +105,8 @@ static void parseBrokerUrl(const char* url)
 /**
  * @brief Extract CN (Common Name) from a PEM certificate
  * 
- * Looks for "CN=" in the certificate subject and extracts the value.
- * This is a simple text-based extraction that works for typical certs.
+ * Uses mbedtls to parse the X.509 certificate and extract the CN from
+ * the subject distinguished name.
  * 
  * @param cert PEM certificate string
  * @param cnBuffer Buffer to store extracted CN
@@ -120,32 +121,45 @@ static void extractCNFromCert(const char* cert, char* cnBuffer, int bufferSize)
         return;
     }
     
-    // Look for "CN=" pattern (could be after "/" or ", ")
-    const char* cnStart = strstr(cert, "CN=");
-    if (cnStart == NULL)
+    mbedtls_x509_crt crt;
+    mbedtls_x509_crt_init(&crt);
+    
+    // Parse the PEM certificate (length must include null terminator)
+    int ret = mbedtls_x509_crt_parse(&crt, (const unsigned char*)cert, strlen(cert) + 1);
+    if (ret != 0)
     {
-        cnStart = strstr(cert, "cn=");
+        mbedtls_x509_crt_free(&crt);
+        return;
     }
     
-    if (cnStart != NULL)
+    // Get the subject as a formatted string (e.g., "CN=Device1, O=Contoso, C=US")
+    char subject[256];
+    ret = mbedtls_x509_dn_gets(subject, sizeof(subject), &crt.subject);
+    mbedtls_x509_crt_free(&crt);
+    
+    if (ret < 0)
     {
-        cnStart += 3;  // Skip "CN="
-        
-        // Find end of CN value (terminated by '/', ',', '\n', '\r', or '"')
-        int i = 0;
-        while (cnStart[i] != '\0' && 
-               cnStart[i] != '/' && 
-               cnStart[i] != ',' && 
-               cnStart[i] != '\n' && 
-               cnStart[i] != '\r' &&
-               cnStart[i] != '"' &&
-               i < bufferSize - 1)
-        {
-            cnBuffer[i] = cnStart[i];
-            i++;
-        }
-        cnBuffer[i] = '\0';
+        return;
     }
+    
+    // Extract CN value from the formatted subject string
+    const char* cnStart = strstr(subject, "CN=");
+    if (cnStart == NULL)
+    {
+        return;
+    }
+    
+    cnStart += 3;  // Skip "CN="
+    int i = 0;
+    while (cnStart[i] != '\0' && 
+           cnStart[i] != ',' && 
+           cnStart[i] != ' ' &&
+           i < bufferSize - 1)
+    {
+        cnBuffer[i] = cnStart[i];
+        i++;
+    }
+    cnBuffer[i] = '\0';
 }
 
 /**

@@ -16,7 +16,6 @@ extern "C" {
  */
 typedef enum {
     UI_FIELD_TEXT,        // Single-line text input
-    UI_FIELD_PASSWORD,    // Password input (hidden in CLI, masked in web)
     UI_FIELD_TEXTAREA     // Multi-line text (for certificates/keys)
 } UIFieldType;
 
@@ -45,12 +44,12 @@ typedef struct {
 static const SettingUIMetadata SETTING_UI[] = {
     // WiFi settings
     {SETTING_WIFI_SSID,        "WiFi SSID",              "set_wifissid",    "SSID",             "WiFi Network Name",                          NULL, UI_FIELD_TEXT},
-    {SETTING_WIFI_PASSWORD,    "WiFi Password",          "set_wifipwd",     "PASS",             "WiFi Password",                              NULL, UI_FIELD_PASSWORD},
+    {SETTING_WIFI_PASSWORD,    "WiFi Password",          "set_wifipwd",     "PASS",             "WiFi Password",                              NULL, UI_FIELD_TEXT},
     
     // MQTT broker settings
     {SETTING_BROKER_URL,       "Broker URL",             "set_broker",      "BrokerURL",        "Broker URL (e.g., mqtts://broker:8883)",     NULL, UI_FIELD_TEXT},
     {SETTING_DEVICE_ID,        "Device ID",              "set_deviceid",    "DeviceID",         "Device/Client ID",                           NULL, UI_FIELD_TEXT},
-    {SETTING_DEVICE_PASSWORD,  "Device Password",        "set_devicepwd",   "DevicePassword",   "Password",                                   NULL, UI_FIELD_PASSWORD},
+    {SETTING_DEVICE_PASSWORD,  "Device Password",        "set_devicepwd",   "DevicePassword",   "Password",                                   NULL, UI_FIELD_TEXT},
     
     // Azure IoT Hub settings
     {SETTING_CONNECTION_STRING,"Connection String",      "set_connstring",  "ConnectionString", "IoT Hub Connection String",                  NULL, UI_FIELD_TEXT},
@@ -59,7 +58,7 @@ static const SettingUIMetadata SETTING_UI[] = {
     {SETTING_DPS_ENDPOINT,     "DPS Endpoint",           "set_dps_endpoint","DPSEndpoint",      "DPS Endpoint",                               "global.azure-devices-provisioning.net", UI_FIELD_TEXT},
     {SETTING_SCOPE_ID,         "Scope ID",               "set_scopeid",     "ScopeId",          "DPS ID Scope",                               NULL, UI_FIELD_TEXT},
     {SETTING_REGISTRATION_ID,  "Registration ID",        "set_regid",       "RegistrationId",   "Registration ID",                            NULL, UI_FIELD_TEXT},
-    {SETTING_SYMMETRIC_KEY,    "Symmetric Key",          "set_symkey",      "SymmetricKey",     "Symmetric Key",                              NULL, UI_FIELD_PASSWORD},
+    {SETTING_SYMMETRIC_KEY,    "Symmetric Key",          "set_symkey",      "SymmetricKey",     "Symmetric Key",                              NULL, UI_FIELD_TEXT},
     
     // Certificate/key settings (textarea in web)
     {SETTING_CA_CERT,          "CA Certificate",         "set_cacert",      "CACert",           "CA Certificate (PEM)",                       NULL, UI_FIELD_TEXTAREA},
@@ -115,14 +114,6 @@ static inline const SettingUIMetadata* SettingUI_FindByFormName(const char* name
         }
     }
     return NULL;
-}
-
-/**
- * @brief Check if a setting is sensitive (password/key)
- */
-static inline bool SettingUI_IsSensitive(const SettingUIMetadata* meta)
-{
-    return meta != NULL && meta->fieldType == UI_FIELD_PASSWORD;
 }
 
 /**

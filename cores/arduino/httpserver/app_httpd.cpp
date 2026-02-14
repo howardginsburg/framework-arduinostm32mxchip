@@ -93,21 +93,7 @@ static const char* page_head =
     ".error{color:Tomato;}"
     "</style></head>";
 
-static const char* wifi_fieldset_start = 
-    "<fieldset><legend>Wi-Fi Settings</legend>"
-    "<div class=\"input-group fluid\">"
-    "<input type=\"radio\" name=\"input_ssid_method\" value=\"select\" onclick=\"changeSSIDInput()\" checked>"
-    "<select name=\"SSID\" id=\"SSID-select\">";
-
-static const char* wifi_fieldset_mid = 
-    "</select></div>"
-    "<div class=\"input-group fluid\">"
-    "<input type=\"radio\" name=\"input_ssid_method\" value=\"text\" onclick=\"changeSSIDInput()\">"
-    "<input type=\"text\" id=\"SSID-text\" placeholder=\"Enter SSID manually\" disabled>"
-    "</div>"
-    "<div class=\"input-group fluid\">"
-    "<input type=\"password\" name=\"PASS\" placeholder=\"Wi-Fi Password\">"
-    "</div></fieldset>";
+// WiFi fieldset is now built dynamically in webSettingsPage() using datalist
 
 static const char* page_body_end = 
     "<div class=\"input-group\"><button type=\"submit\">Save Configuration</button></div>"
@@ -115,13 +101,14 @@ static const char* page_body_end =
     "<p style=\"color:#616161;text-align:center;\">Refresh to update Wi-Fi list</p>"
     "</div></section>"
     "<script>"
-    "function changeSSIDInput(){"
-    "var sel=document.getElementsByName('input_ssid_method')[0].checked;"
+    "function ssidChanged(){"
     "var s=document.getElementById('SSID-select');"
     "var t=document.getElementById('SSID-text');"
-    "s.name=sel?'SSID':'';s.disabled=!sel;"
-    "t.name=sel?'':'SSID';t.disabled=sel;"
-    "}"
+    "if(s.value==='__manual__'){"
+    "t.style.display='';t.name='SSID';s.name='';t.focus();"
+    "}else{"
+    "t.style.display='none';t.name='';s.name='SSID';"
+    "}}"
     "</script></body></html>";
 
 // ============================================================================
@@ -131,7 +118,6 @@ static const char* page_body_end =
 extern OLEDDisplay Screen;
 extern NetworkInterface *_defaultSystemNetwork;
 
-static ConnectionProfile s_activeProfile = PROFILE_NONE;
 static bool s_isHttpInit = false;
 static bool s_isHandlersRegistered = false;
 
@@ -161,31 +147,96 @@ static bool hasConnectionSettings(void)
 }
 
 /**
- * @brief Generate HTML for a single form field
+ * @brief Write HTML-escaped text into buffer
+ */
+static int writeHtmlEscaped(char* dest, int destSize, const char* src)
+{
+    int written = 0;
+    for (const char* p = src; *p && written < destSize - 6; p++)
+    {
+        switch (*p)
+        {
+            case '&':
+                if (written + 5 >= destSize) goto done;
+                memcpy(&dest[written], "&amp;", 5); written += 5; break;
+            case '"':
+                if (written + 6 >= destSize) goto done;
+                memcpy(&dest[written], "&quot;", 6); written += 6; break;
+            case '<':
+                if (written + 4 >= destSize) goto done;
+                memcpy(&dest[written], "&lt;", 4); written += 4; break;
+            case '>':
+                if (written + 4 >= destSize) goto done;
+                memcpy(&dest[written], "&gt;", 4); written += 4; break;
+            default:
+                dest[written++] = *p; break;
+        }
+    }
+done:
+    dest[written] = '\0';
+    return written;
+}
+
+/**
+ * @brief Generate HTML for a single form field, pre-populated from EEPROM
  */
 static int generateFieldHtml(char* buffer, int bufferSize, const SettingUIMetadata* field)
 {
-    const char* inputType;
-    char defaultVal[128] = "";
+    int len = 0;
+    int ret;
     
-    if (field->defaultValue && field->defaultValue[0] != '\0')
+    // Read current value from EEPROM
+    int maxLen = DeviceConfig_GetMaxLen(field->id);
+    char* currentValue = NULL;
+    bool hasValue = false;
+    
+    if (maxLen > 0)
     {
-        snprintf(defaultVal, sizeof(defaultVal), " value=\"%s\"", field->defaultValue);
+        currentValue = (char*)calloc(maxLen + 1, 1);
+        if (currentValue && DeviceConfig_Read(field->id, currentValue, maxLen + 1) > 0
+            && currentValue[0] != '\0')
+        {
+            hasValue = true;
+        }
     }
     
     if (field->fieldType == UI_FIELD_TEXTAREA)
     {
-        return snprintf(buffer, bufferSize,
-            "<div class=\"input-group fluid\"><textarea name=\"%s\" rows=\"3\" placeholder=\"%s\"></textarea></div>",
+        ret = snprintf(buffer, bufferSize,
+            "<div class=\"input-group fluid\"><textarea name=\"%s\" rows=\"3\" placeholder=\"%s\">",
             field->webFormName, field->webPlaceholder);
+        len += (ret > 0 ? ret : 0);
+        
+        if (hasValue)
+        {
+            len += writeHtmlEscaped(&buffer[len], bufferSize - len, currentValue);
+        }
+        
+        ret = snprintf(&buffer[len], bufferSize - len, "</textarea></div>");
+        len += (ret > 0 ? ret : 0);
     }
     else
     {
-        inputType = (field->fieldType == UI_FIELD_PASSWORD) ? "password" : "text";
-        return snprintf(buffer, bufferSize,
-            "<div class=\"input-group fluid\"><input type=\"%s\" name=\"%s\"%s placeholder=\"%s\"></div>",
-            inputType, field->webFormName, defaultVal, field->webPlaceholder);
+        ret = snprintf(buffer, bufferSize,
+            "<div class=\"input-group fluid\"><input type=\"text\" name=\"%s\" placeholder=\"%s\" value=\"",
+            field->webFormName, field->webPlaceholder);
+        len += (ret > 0 ? ret : 0);
+        
+        if (hasValue)
+        {
+            len += writeHtmlEscaped(&buffer[len], bufferSize - len, currentValue);
+        }
+        else if (field->defaultValue && field->defaultValue[0] != '\0')
+        {
+            len += writeHtmlEscaped(&buffer[len], bufferSize - len, field->defaultValue);
+        }
+        
+        ret = snprintf(&buffer[len], bufferSize - len, "\"></div>");
+        len += (ret > 0 ? ret : 0);
     }
+    
+    if (currentValue) free(currentValue);
+    return len;
 }
 
 /**
@@ -201,7 +252,7 @@ static int generateProfileFieldsHtml(char* buffer, int bufferSize, int currentLe
     if (!hasFields)
     {
         // No connection settings - just WiFi
-        if (s_activeProfile == PROFILE_NONE)
+        if (DeviceConfig_GetActiveProfile() == PROFILE_NONE)
         {
             ret = snprintf(&buffer[len], bufferSize - len,
                 "<p style=\"color:#616161;\">Only Wi-Fi settings available.</p>");
@@ -518,22 +569,75 @@ static int webSettingsPage(httpd_request_t* req)
         len += (ret > 0 ? ret : 0);
     }
     
-    // WiFi fieldset
+    // WiFi fieldset (select dropdown + manual entry option)
     if (DeviceConfig_IsSettingAvailable(SETTING_WIFI_SSID))
     {
-        strcpy(&page[len], wifi_fieldset_start);
-        len += strlen(wifi_fieldset_start);
+        char currentSsid[WIFI_SSID_MAX_LEN + 1] = "";
+        char currentPwd[WIFI_PWD_MAX_LEN + 1] = "";
+        DeviceConfig_Read(SETTING_WIFI_SSID, currentSsid, sizeof(currentSsid));
+        if (DeviceConfig_IsSettingAvailable(SETTING_WIFI_PASSWORD))
+        {
+            DeviceConfig_Read(SETTING_WIFI_PASSWORD, currentPwd, sizeof(currentPwd));
+        }
+        
+        // Check if current SSID matches any scanned network
+        bool ssidInList = false;
+        for (int i = 0; i < validWifiCount; ++i)
+        {
+            if (strcmp(currentSsid, wifiScanResult[validWifiIndex[i]].get_ssid()) == 0)
+            {
+                ssidInList = true;
+                break;
+            }
+        }
+        
+        int ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
+            "<fieldset><legend>Wi-Fi Settings</legend>"
+            "<div class=\"input-group fluid\">"
+            "<select id=\"SSID-select\" name=\"SSID\" onchange=\"ssidChanged()\">"
+            "<option value=\"\" disabled%s>-- Select Wi-Fi Network --</option>",
+            (!ssidInList && currentSsid[0] == '\0') ? " selected" : "");
+        len += (ret > 0 ? ret : 0);
         
         for (int i = 0; i < validWifiCount; ++i)
         {
             const char* ssid = wifiScanResult[validWifiIndex[i]].get_ssid();
-            int ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
-                "<option value=\"%s\">%s</option>", ssid, ssid);
+            bool selected = (ssidInList && strcmp(currentSsid, ssid) == 0);
+            ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
+                "<option value=\"%s\"%s>%s</option>",
+                ssid, selected ? " selected" : "", ssid);
             len += (ret > 0 ? ret : 0);
         }
         
-        strcpy(&page[len], wifi_fieldset_mid);
-        len += strlen(wifi_fieldset_mid);
+        ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
+            "<option value=\"__manual__\"%s>-- Enter Manually --</option>"
+            "</select></div>"
+            "<div class=\"input-group fluid\">"
+            "<input type=\"text\" id=\"SSID-text\" name=\"\" "
+            "placeholder=\"Enter Wi-Fi SSID\" style=\"display:%s\" value=\"",
+            (!ssidInList && currentSsid[0] != '\0') ? " selected" : "",
+            (!ssidInList && currentSsid[0] != '\0') ? "" : "none");
+        len += (ret > 0 ? ret : 0);
+        
+        // Pre-fill manual text field if SSID is not in scan list
+        if (!ssidInList && currentSsid[0] != '\0')
+        {
+            len += writeHtmlEscaped(&page[len], DEFAULT_PAGE_SIZE - len, currentSsid);
+        }
+        
+        ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
+            "\">"
+            "</div>"
+            "<div class=\"input-group fluid\">"
+            "<input type=\"text\" name=\"PASS\" "
+            "placeholder=\"Wi-Fi Password\" value=\"");
+        len += (ret > 0 ? ret : 0);
+        
+        len += writeHtmlEscaped(&page[len], DEFAULT_PAGE_SIZE - len, currentPwd);
+        
+        ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
+            "\"></div></fieldset>");
+        len += (ret > 0 ? ret : 0);
     }
     
     // Profile fields (data-driven)
@@ -685,13 +789,10 @@ static int startHttpServer(void)
 // Public API
 // ============================================================================
 
-int httpd_server_start(ConnectionProfile profile)
+int httpd_server_start(void)
 {
     int err;
-    
-    s_activeProfile = profile;
-    DeviceConfig_Init(profile);
-    
+
     err = startHttpServer();
     if (err != kNoErr) return err;
 

@@ -118,11 +118,6 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
         
         if (allocatedValue != NULL)
         {
-            // Zero out memory for sensitive data before freeing
-            if (SettingUI_IsSensitive(meta) || isCertOrKey)
-            {
-                memset(allocatedValue, 0, strlen(allocatedValue));
-            }
             free(allocatedValue);
         }
         return true;
@@ -135,11 +130,6 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     // Clean up allocated memory
     if (allocatedValue != NULL)
     {
-        // Zero out memory for sensitive data before freeing
-        if (SettingUI_IsSensitive(meta) || isCertOrKey)
-        {
-            memset(allocatedValue, 0, valueLen);
-        }
         free(allocatedValue);
     }
     
@@ -160,12 +150,6 @@ bool config_dispatch_command(const char* cmdName, int argc, char** argv)
     return true;
 }
 
-bool config_is_privacy_command(const char* cmdName)
-{
-    const SettingUIMetadata* meta = SettingUI_FindByCliCommand(cmdName);
-    return SettingUI_IsSensitive(meta);
-}
-
 void config_show_status(void)
 {
     Serial.printf("Configuration Status (Profile: %s):\r\n", DeviceConfig_GetProfileName());
@@ -182,11 +166,7 @@ void config_show_status(void)
             
             if (result > 0 && buffer[0] != '\0')
             {
-                if (SettingUI_IsSensitive(&SETTING_UI[i]))
-                {
-                    Serial.printf("SET (hidden)\r\n");
-                }
-                else if (SettingUI_IsMultiLine(&SETTING_UI[i]))
+                if (SettingUI_IsMultiLine(&SETTING_UI[i]))
                 {
                     Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
                 }
