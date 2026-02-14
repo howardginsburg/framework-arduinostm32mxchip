@@ -11,6 +11,7 @@
 #include "SystemTickCounter.h"
 #include "SystemWeb.h"
 #include "SystemWiFi.h"
+#define _DEVICE_CONFIG_IMPL
 #include "config/DeviceConfig.h"
 #include "../../../libraries/Sensors/src/SensorManager.h"
 

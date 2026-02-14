@@ -10,6 +10,7 @@
  * from a URL, extracting device ID from certificates or connection strings).
  */
 
+#define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
 #include "mbedtls/x509_crt.h"

@@ -21,9 +21,32 @@ typedef enum {
     PROFILE_MQTT_MTLS,              // MQTT with mutual TLS (client cert + key + CA cert)
     PROFILE_IOTHUB_SAS,             // Azure IoT Hub with SAS key (connection string)
     PROFILE_IOTHUB_CERT,            // Azure IoT Hub with X.509 certificate
-    PROFILE_DPS_SAS,                // Azure DPS with symmetric key
-    PROFILE_DPS_CERT                // Azure DPS with X.509 certificate
+    PROFILE_DPS_SAS,                // Azure DPS with symmetric key (individual enrollment)
+    PROFILE_DPS_CERT,               // Azure DPS with X.509 certificate
+    PROFILE_DPS_SAS_GROUP           // Azure DPS with symmetric key (group enrollment)
 } ConnectionProfile;
+
+/**
+ * @brief Preprocessor macros matching enum values for #if directive support
+ * 
+ * C/C++ enum values cannot be evaluated by the preprocessor in #if directives.
+ * These macros shadow the enum names with integer constants so that user code
+ * can write: #if CONNECTION_PROFILE == PROFILE_IOTHUB_SAS
+ * 
+ * Framework implementation files define _DEVICE_CONFIG_IMPL before including
+ * this header to suppress these macros and use the type-safe enum values instead.
+ */
+#ifndef _DEVICE_CONFIG_IMPL
+#define PROFILE_NONE              0
+#define PROFILE_MQTT_USERPASS     1
+#define PROFILE_MQTT_USERPASS_TLS 2
+#define PROFILE_MQTT_MTLS         3
+#define PROFILE_IOTHUB_SAS        4
+#define PROFILE_IOTHUB_CERT       5
+#define PROFILE_DPS_SAS           6
+#define PROFILE_DPS_CERT          7
+#define PROFILE_DPS_SAS_GROUP     8
+#endif
 
 /**
  * @brief Setting identifiers for device configuration

@@ -9,6 +9,7 @@
  * operations. For runtime loading and parsing, see DeviceConfigRuntime.cpp.
  */
 
+#define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
 #include "EEPROMInterface.h"
@@ -212,6 +213,29 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
             // DEVICE_CERT spans zones 0+7+8 = 2640 bytes total
             ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE)  // SETTING_DEVICE_CERT
+        }
+    },
+    
+    // PROFILE_DPS_SAS_GROUP - Azure DPS with symmetric key (group enrollment)
+    {
+        PROFILE_DPS_SAS_GROUP,
+        "Azure DPS (Group SAS)",
+        "Azure Device Provisioning Service with group symmetric key (derived device key)",
+        {
+            ZONE(3, ZONE_3_SIZE),   // SETTING_WIFI_SSID
+            ZONE(10, ZONE_10_SIZE), // SETTING_WIFI_PASSWORD
+            UNUSED_ZONE,            // SETTING_BROKER_URL
+            UNUSED_ZONE,            // SETTING_DEVICE_ID
+            UNUSED_ZONE,            // SETTING_DEVICE_PASSWORD
+            UNUSED_ZONE,            // SETTING_CA_CERT
+            UNUSED_ZONE,            // SETTING_CLIENT_CERT
+            UNUSED_ZONE,            // SETTING_CLIENT_KEY
+            UNUSED_ZONE,            // SETTING_CONNECTION_STRING
+            ZONE(5, ZONE_5_SIZE),   // SETTING_DPS_ENDPOINT
+            ZONE(2, ZONE_2_SIZE),   // SETTING_SCOPE_ID
+            ZONE(6, ZONE_6_SIZE),   // SETTING_REGISTRATION_ID
+            ZONE(7, ZONE_7_SIZE),   // SETTING_SYMMETRIC_KEY
+            UNUSED_ZONE             // SETTING_DEVICE_CERT
         }
     }
 };

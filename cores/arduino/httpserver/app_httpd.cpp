@@ -35,6 +35,7 @@
 #include "mbed.h"
 #include "mico.h"
 #include "app_httpd.h"
+#define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "SettingUI.h"
 #include "SettingValidator.h"

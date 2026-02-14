@@ -146,6 +146,7 @@ The SDK supports multiple connection profiles that determine which settings are 
 | `PROFILE_IOTHUB_SAS` | Azure IoT Hub (SAS) | WiFi, Connection String |
 | `PROFILE_IOTHUB_CERT` | Azure IoT Hub (X.509) | WiFi, Connection String, Device Cert |
 | `PROFILE_DPS_SAS` | Azure DPS (Symmetric Key) | WiFi, DPS Endpoint, Scope ID, Registration ID, Symmetric Key |
+| `PROFILE_DPS_SAS_GROUP` | Azure DPS (Group SAS) | WiFi, DPS Endpoint, Scope ID, Registration ID, Symmetric Key |
 | `PROFILE_DPS_CERT` | Azure DPS (X.509) | WiFi, DPS Endpoint, Scope ID, Registration ID, Device Cert |
 
 ### Setting the Profile
@@ -176,7 +177,7 @@ A demonstration of mutual TLS (mTLS) MQTT connectivity using X.509 client certif
 
 ### [MXChipIoTHubDemo](https://github.com/howardginsburg/MXChipIoTHubDemo)
 
-A pure MQTT implementation for connecting to Azure IoT Hub without requiring the deprecated Azure SDK that was a part of the original framework. Uses PubSubClient for direct MQTT communication with full IoT Hub functionality: Device-to-Cloud (D2C) telemetry, Cloud-to-Device (C2D) message receiving, and Device Twin support for reported/desired properties. This lightweight approach demonstrates how to implement Azure IoT Hub connectivity from scratch using standard MQTT topics and SAS token authentication.
+A pure MQTT implementation for connecting to Azure IoT Hub without requiring the deprecated Azure SDK that was a part of the original framework. Uses PubSubClient for direct MQTT communication with full IoT Hub functionality: Device-to-Cloud (D2C) telemetry, Cloud-to-Device (C2D) message receiving, and Device Twin support for reported/desired properties. Supports individual and group enrollment via DPS with automatic device key derivation. This lightweight approach demonstrates how to implement Azure IoT Hub connectivity from scratch using standard MQTT topics and SAS token authentication.
 
 ---
 
@@ -334,7 +335,7 @@ Commands vary based on the active connection profile.
 | `set_dps_endpoint <url>` | Set DPS global endpoint | DPS_* |
 | `set_scopeid <id>` | Set DPS ID Scope | DPS_* |
 | `set_regid <id>` | Set DPS registration ID | DPS_* |
-| `set_symkey <key>` | Set DPS symmetric key | DPS_SAS |
+| `set_symkey <key>` | Set DPS symmetric key | DPS_SAS, DPS_SAS_GROUP |
 | **Certificate Configuration** | | |
 | `set_cacert "<pem>"` | Set CA/root certificate | TLS profiles |
 | `set_clientcert "<pem>"` | Set client certificate | MTLS/CERT profiles |
