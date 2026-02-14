@@ -49,9 +49,9 @@ This fork includes significant modifications from the original SDK:
 
 | Component | Reason |
 |-----------|--------|
-| **Azure IoT Hub libraries** | The built in libraries are outdated; devices can no longer connect |
+| **Azure IoT Hub libraries** | The original built in libraries are outdated; devices can no longer connect |
 | **Board telemetry collector** | Defunct Microsoft telemetry service |
-| **Built-in MQTT library** | Did not support TLS connections |
+| **Built-in MQTT library** | Original Paho library Did not support mTLS connections |
 
 ### Added
 
@@ -62,6 +62,8 @@ This fork includes significant modifications from the original SDK:
 | **Connection Profiles** | Pre-defined connection profiles for MQTT, Azure IoT Hub, and Azure DPS |
 | **DeviceConfig System** | Unified configuration storage with multi-zone support for large certificates |
 | **SensorManager** | Simple API for all onboard sensors (temperature, humidity, pressure, IMU, magnetometer) |
+| **AzureIoT Library** | Complete Azure IoT Hub client with DPS provisioning, SAS token generation, and Device Twin support |
+| **PubSubClient Library** | Bundled MQTT client library (Nick O'Leary, MIT license) — no external lib_deps needed |
 | **Updated Web Configuration UI** | Browser-based setup via WiFi AP mode |
 | **Input Validation** | Centralized validation for URLs, certificates, and connection strings |
 | **Updated CLI commands** | Extensible serial commands for all configuration settings |
@@ -131,6 +133,41 @@ Sensors.toJson(json, sizeof(json));
 | LSM6DSL | Accelerometer, Gyroscope | mg, mdps |
 | LIS2MDL | Magnetometer | mGauss |
 
+### AzureIoT Library
+
+The `AzureIoT` library provides a complete Azure IoT Hub client with DPS provisioning support. It handles credential loading, SAS token generation, MQTT connection management, telemetry, C2D messages, and Device Twin operations. Select a connection profile via build flags and the library handles everything else.
+
+```cpp
+#include <AzureIoTHub.h>
+
+void onC2D(const char* topic, const char* payload, unsigned int len) {
+    Serial.println(payload);
+}
+
+void setup() {
+    WiFi.begin();  // credentials from EEPROM
+
+    azureIoTInit();       // loads config, provisions via DPS if needed
+    azureIoTConnect();    // connects to IoT Hub over MQTT
+    azureIoTSetC2DCallback(onC2D);
+}
+
+void loop() {
+    azureIoTLoop();       // process MQTT messages
+    azureIoTSendTelemetry("{\"temp\":25.3}");
+    delay(10000);
+}
+```
+
+The library is split into focused modules:
+
+| Module | Purpose |
+|--------|---------|
+| `AzureIoTHub.h/.cpp` | Public API — init, connect, telemetry, twin, callbacks |
+| `AzureIoTDPS.h/.cpp` | Device Provisioning Service registration over MQTT |
+| `AzureIoTCrypto.h/.cpp` | SAS token generation, HMAC-SHA256, group key derivation |
+| `AzureIoTConfig.h` | Protocol constants and Azure root CA certificate |
+
 ---
 
 ## Connection Profiles
@@ -177,7 +214,7 @@ A demonstration of mutual TLS (mTLS) MQTT connectivity using X.509 client certif
 
 ### [MXChipIoTHubDemo](https://github.com/howardginsburg/MXChipIoTHubDemo)
 
-A pure MQTT implementation for connecting to Azure IoT Hub without requiring the deprecated Azure SDK that was a part of the original framework. Uses PubSubClient for direct MQTT communication with full IoT Hub functionality: Device-to-Cloud (D2C) telemetry, Cloud-to-Device (C2D) message receiving, and Device Twin support for reported/desired properties. Supports individual and group enrollment via DPS with automatic device key derivation. This lightweight approach demonstrates how to implement Azure IoT Hub connectivity from scratch using standard MQTT topics and SAS token authentication.
+A pure MQTT implementation for connecting to Azure IoT Hub without requiring the deprecated Azure SDK that was a part of the original framework. Uses the framework's built-in AzureIoT library for direct MQTT communication with full IoT Hub functionality: Device-to-Cloud (D2C) telemetry, Cloud-to-Device (C2D) message receiving, and Device Twin support for reported/desired properties. Supports individual and group enrollment via DPS with automatic device key derivation. This lightweight approach demonstrates how to implement Azure IoT Hub connectivity using standard MQTT topics and SAS token authentication.
 
 ---
 
@@ -408,6 +445,19 @@ cores/arduino/config/
 ├── DeviceConfigCLI.h/cpp    # Serial CLI interface
 ├── SettingUI.h              # Shared UI metadata for CLI and Web
 └── SettingValidator.h       # Input validation functions
+```
+
+The Azure IoT library provides reusable IoT Hub and DPS functionality:
+
+```
+libraries/AzureIoT/src/
+├── AzureIoTHub.h/cpp        # Public API (init, connect, telemetry, twin)
+├── AzureIoTDPS.h/cpp        # DPS registration over MQTT
+├── AzureIoTCrypto.h/cpp     # SAS tokens, HMAC-SHA256, group key derivation
+└── AzureIoTConfig.h         # Protocol constants and root CA certificate
+
+libraries/PubSubClient/src/
+├── PubSubClient.h/cpp       # Bundled MQTT client (MIT, Nick O'Leary)
 ```
 
 ### EEPROM Zone Allocation
