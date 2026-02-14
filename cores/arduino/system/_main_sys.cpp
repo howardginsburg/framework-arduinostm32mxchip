@@ -12,6 +12,7 @@
 #include "SystemWeb.h"
 #include "SystemWiFi.h"
 #include "config/DeviceConfig.h"
+#include "../../../libraries/Sensors/src/SensorManager.h"
 
 static bool Initialization(void)
 {
@@ -56,6 +57,9 @@ static bool Initialization(void)
     _red.write(0.0f);
     _green.write(0.0f);
     _blue.write(0.0f);
+
+    // Initialize all onboard sensors
+    Sensors.init();
 
     return true;
 }
