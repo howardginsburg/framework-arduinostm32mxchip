@@ -1,0 +1,1 @@
+python3 az3166_patch_binary.py firmware.bin patched_firmware.bin

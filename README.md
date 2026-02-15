@@ -19,6 +19,7 @@ A community-maintained fork of the [Microsoft Azure IoT DevKit SDK](https://gith
 - [WiFiClientSecure Usage](#wificlientsecure-usage)
 - [Configuration CLI](#configuration-cli)
 - [Web Configuration UI](#web-configuration-ui)
+- [Building a Standalone Binary](#building-a-standalone-binary)
 - [Architecture](#architecture)
 - [License](#license)
 
@@ -427,6 +428,12 @@ All settings are validated before saving:
 | DPS Endpoint | Must be valid HTTPS URL |
 
 Invalid entries are rejected with descriptive error messages.
+
+---
+
+## Building a Standalone Binary
+
+If you need to produce a single `.bin` file that combines the bootloader and your application firmware for drag-and-drop flashing over USB, see [bootloader/BinaryBuild.md](bootloader/BinaryBuild.md) for instructions.
 
 ---
 
