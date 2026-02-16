@@ -21,6 +21,8 @@ A community-maintained fork of the [Microsoft Azure IoT DevKit SDK](https://gith
 
 ## About the Hardware
 
+<img src="docs/images/mxchip-az3166.png" alt="MXChip AZ3166 IoT DevKit" width="400">
+
 The **MXChip AZ3166 IoT DevKit** features ARM Cortex-M processors with:
 
 | Component | Details |
@@ -33,6 +35,50 @@ The **MXChip AZ3166 IoT DevKit** features ARM Cortex-M processors with:
 | **Buttons** | A, B, and Reset |
 | **LEDs** | RGB LED, user LED, WiFi LED |
 | **Secure Storage** | STSAFE-A100 secure element with multiple storage zones |
+
+### Architecture Diagram
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                          Your Sketch                           │
+│              setup() / loop() — Application Code               │
+├────────────────────────────────────────────────────────────────┤
+│                    Arduino Framework Layer                     │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │   DeviceConfig   │ │  SensorManager   │ │ WiFiClientSecure │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │     AzureIoT     │ │   PubSubClient   │ │    HTTPClient    │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │    HTTPServer    │ │    NTPClient     │ │   OLEDDisplay    │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+│      Digital/Analog I/O · Serial · Interrupts · Watchdog       │
+├────────────────────────────────────────────────────────────────┤
+│                         Platform Layer                         │
+│ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│ │   mbed OS 5.4    │ │    MiCO WiFi     │ │     mbedTLS      │ │
+│ │    RTOS · HAL    │ │     EMW10xx      │ │   TLS 1.1/1.2    │ │
+│ │     Drivers      │ │    lwIP Stack    │ │   X.509 · SAS    │ │
+│ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+├────────────────────────────────────────────────────────────────┤
+│                            Hardware                            │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │            STM32F412 (ARM Cortex-M4, 96 MHz)             │  │
+│  │       Flash: 976 KB app · RAM: 256 KB · RTC · IWDG       │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐ │
+│ │  BCM43362  │  │STSAFE-A100 │  │  NAU88C10  │  │128×64 OLED │ │
+│ │ WiFi SDIO  │  │ Secure I2C │  │   Audio    │  │SSD1306 I2C │ │
+│ └────────────┘  └────────────┘  └────────────┘  └────────────┘ │
+│ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────┐ │
+│ │   HTS221   │  │  LPS22HB   │  │  LSM6DSL   │  │  LIS2MDL   │ │
+│ │ Temp/Humid │  │  Pressure  │  │ Accel/Gyro │  │Magnetometer│ │
+│ └────────────┘  └────────────┘  └────────────┘  └────────────┘ │
+│   Buttons (A, B, Reset) · RGB LED · User LED · WiFi LED        │
+│   SPI · I2C · UART · USB · IrDA · QSPI Flash                   │
+└────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
