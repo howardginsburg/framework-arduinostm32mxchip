@@ -2,7 +2,7 @@
 
 This document describes the modifications made to the TLS socket layer to improve connection stability for MQTT and other TLS-based protocols.
 
-> **See also**: [Main README](README.md) for general usage and limitations.
+> **See also**: [Main README](../README.md) for general usage and limitations.
 
 ---
 
@@ -121,4 +121,4 @@ These values were tuned to balance responsiveness with stability, based on obser
 
 Even with these improvements, **bidirectional MQTT** (subscriptions) may experience instability. The mbedTLS 2.x implementation's handling of idle polls can still trigger false disconnections with some MQTT libraries.
 
-For production use, we recommend **publish-only** patterns when using `WiFiClientSecure`. See the [README](README.md#tlsssl-limitations) for workarounds.
+For production use, we recommend **publish-only** patterns when using `WiFiClientSecure`. See the [README](../README.md#tlsssl-limitations) for workarounds.
