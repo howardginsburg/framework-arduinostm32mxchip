@@ -70,15 +70,40 @@ static const SettingUIMetadata SETTING_UI[] = {
 #define SETTING_UI_COUNT (sizeof(SETTING_UI) / sizeof(SettingUIMetadata))
 
 /**
+ * @brief Get the active UI metadata array
+ * 
+ * Returns CUSTOM_PROFILE_UI when a custom profile with UI metadata is active,
+ * otherwise returns the built-in SETTING_UI array.
+ */
+const SettingUIMetadata* SettingUI_GetActiveArray(void);
+
+/**
+ * @brief Get the number of entries in the active UI metadata array
+ */
+int SettingUI_GetActiveCount(void);
+
+/**
+ * @brief Override the active UI metadata with a custom array
+ * 
+ * Called by DeviceConfig_Init() when custom_profile.h defines CUSTOM_PROFILE_UI.
+ * 
+ * @param ui    Custom UI metadata array
+ * @param count Number of entries in the array
+ */
+void SettingUI_SetCustomUI(const SettingUIMetadata* ui, int count);
+
+/**
  * @brief Find UI metadata by setting ID
  */
 static inline const SettingUIMetadata* SettingUI_FindById(SettingID id)
 {
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int count = SettingUI_GetActiveCount();
+    for (int i = 0; i < count; i++)
     {
-        if (SETTING_UI[i].id == id)
+        if (ui[i].id == id)
         {
-            return &SETTING_UI[i];
+            return &ui[i];
         }
     }
     return NULL;
@@ -90,11 +115,13 @@ static inline const SettingUIMetadata* SettingUI_FindById(SettingID id)
 static inline const SettingUIMetadata* SettingUI_FindByCliCommand(const char* cmd)
 {
     if (cmd == NULL) return NULL;
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int count = SettingUI_GetActiveCount();
+    for (int i = 0; i < count; i++)
     {
-        if (strcmp(SETTING_UI[i].cliCommand, cmd) == 0)
+        if (strcmp(ui[i].cliCommand, cmd) == 0)
         {
-            return &SETTING_UI[i];
+            return &ui[i];
         }
     }
     return NULL;
@@ -106,11 +133,13 @@ static inline const SettingUIMetadata* SettingUI_FindByCliCommand(const char* cm
 static inline const SettingUIMetadata* SettingUI_FindByFormName(const char* name)
 {
     if (name == NULL) return NULL;
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int count = SettingUI_GetActiveCount();
+    for (int i = 0; i < count; i++)
     {
-        if (strcmp(SETTING_UI[i].webFormName, name) == 0)
+        if (strcmp(ui[i].webFormName, name) == 0)
         {
-            return &SETTING_UI[i];
+            return &ui[i];
         }
     }
     return NULL;

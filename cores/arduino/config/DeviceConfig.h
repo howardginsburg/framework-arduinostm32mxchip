@@ -23,7 +23,8 @@ typedef enum {
     PROFILE_IOTHUB_CERT,            // Azure IoT Hub with X.509 certificate
     PROFILE_DPS_SAS,                // Azure DPS with symmetric key (individual enrollment)
     PROFILE_DPS_CERT,               // Azure DPS with X.509 certificate
-    PROFILE_DPS_SAS_GROUP           // Azure DPS with symmetric key (group enrollment)
+    PROFILE_DPS_SAS_GROUP,          // Azure DPS with symmetric key (group enrollment)
+    PROFILE_CUSTOM                  // User-defined profile via custom_profile.h
 } ConnectionProfile;
 
 /**
@@ -46,6 +47,7 @@ typedef enum {
 #define PROFILE_DPS_SAS           6
 #define PROFILE_DPS_CERT          7
 #define PROFILE_DPS_SAS_GROUP     8
+#define PROFILE_CUSTOM            9
 #endif
 
 /**

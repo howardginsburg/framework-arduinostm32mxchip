@@ -12,8 +12,14 @@
 #define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
+#include "SettingUI.h"
 #include "EEPROMInterface.h"
 #include <string.h>
+
+// Check for user-provided custom profile definition
+#if __has_include("custom_profile.h")
+    #include "custom_profile.h"
+#endif
 
 // Current active profile
 static const ProfileDefinition* s_activeProfile = NULL;
@@ -242,6 +248,16 @@ static const ProfileDefinition PROFILES[] = {
 
 void DeviceConfig_Init(ConnectionProfile profile)
 {
+#if __has_include("custom_profile.h")
+    if (profile == PROFILE_CUSTOM)
+    {
+        s_activeProfile = &CUSTOM_PROFILE;
+#ifdef CUSTOM_PROFILE_UI_COUNT
+        SettingUI_SetCustomUI(CUSTOM_PROFILE_UI, CUSTOM_PROFILE_UI_COUNT);
+#endif
+        return;
+    }
+#endif
     if (profile < sizeof(PROFILES) / sizeof(ProfileDefinition))
     {
         s_activeProfile = &PROFILES[profile];

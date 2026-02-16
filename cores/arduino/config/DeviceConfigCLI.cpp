@@ -40,14 +40,16 @@ void config_print_help(void)
 {
     Serial.printf("Configuration commands for profile '%s':\r\n", DeviceConfig_GetProfileName());
     
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int uiCount = SettingUI_GetActiveCount();
+    for (int i = 0; i < uiCount; i++)
     {
-        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
+        if (DeviceConfig_IsSettingAvailable(ui[i].id))
         {
-            int maxLen = DeviceConfig_GetMaxLen(SETTING_UI[i].id);
+            int maxLen = DeviceConfig_GetMaxLen(ui[i].id);
             Serial.printf(" - %s <value>: Set %s (max %d bytes)\r\n",
-                SETTING_UI[i].cliCommand,
-                SETTING_UI[i].label,
+                ui[i].cliCommand,
+                ui[i].label,
                 maxLen);
         }
     }
@@ -155,18 +157,20 @@ void config_show_status(void)
     Serial.printf("Configuration Status (Profile: %s):\r\n", DeviceConfig_GetProfileName());
     Serial.printf("================================\r\n");
     
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int uiCount = SettingUI_GetActiveCount();
+    for (int i = 0; i < uiCount; i++)
     {
-        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
+        if (DeviceConfig_IsSettingAvailable(ui[i].id))
         {
             char buffer[64];
-            int result = DeviceConfig_Read(SETTING_UI[i].id, buffer, sizeof(buffer));
+            int result = DeviceConfig_Read(ui[i].id, buffer, sizeof(buffer));
             
-            Serial.printf("%s: ", SETTING_UI[i].label);
+            Serial.printf("%s: ", ui[i].label);
             
             if (result > 0 && buffer[0] != '\0')
             {
-                if (SettingUI_IsMultiLine(&SETTING_UI[i]))
+                if (SettingUI_IsMultiLine(&ui[i]))
                 {
                     Serial.printf("SET (starts with: %.20s...)\r\n", buffer);
                 }

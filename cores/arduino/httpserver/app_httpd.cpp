@@ -131,15 +131,17 @@ static bool s_isHandlersRegistered = false;
  */
 static bool hasConnectionSettings(void)
 {
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int uiCount = SettingUI_GetActiveCount();
+    for (int i = 0; i < uiCount; i++)
     {
         // Skip WiFi settings
-        if (SETTING_UI[i].id == SETTING_WIFI_SSID || 
-            SETTING_UI[i].id == SETTING_WIFI_PASSWORD)
+        if (ui[i].id == SETTING_WIFI_SSID || 
+            ui[i].id == SETTING_WIFI_PASSWORD)
         {
             continue;
         }
-        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
+        if (DeviceConfig_IsSettingAvailable(ui[i].id))
         {
             return true;
         }
@@ -268,17 +270,19 @@ static int generateProfileFieldsHtml(char* buffer, int bufferSize, int currentLe
     len += (ret > 0 ? ret : 0);
     
     // Add all available fields in order (skip WiFi - handled separately)
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int uiCount = SettingUI_GetActiveCount();
+    for (int i = 0; i < uiCount; i++)
     {
         // Skip WiFi settings
-        if (SETTING_UI[i].id == SETTING_WIFI_SSID || 
-            SETTING_UI[i].id == SETTING_WIFI_PASSWORD)
+        if (ui[i].id == SETTING_WIFI_SSID || 
+            ui[i].id == SETTING_WIFI_PASSWORD)
         {
             continue;
         }
-        if (DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
+        if (DeviceConfig_IsSettingAvailable(ui[i].id))
         {
-            ret = generateFieldHtml(&buffer[len], bufferSize - len, &SETTING_UI[i]);
+            ret = generateFieldHtml(&buffer[len], bufferSize - len, &ui[i]);
             len += (ret > 0 ? ret : 0);
         }
     }
@@ -395,15 +399,19 @@ static int parseFormData(httpd_request_t* req, char* buf, FormValues* fv)
     }
     
     // Parse all other fields (data-driven!)
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
     {
-        // Skip WiFi settings
-        if (SETTING_UI[i].id == SETTING_WIFI_SSID || 
-            SETTING_UI[i].id == SETTING_WIFI_PASSWORD)
+        const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+        int uiCount = SettingUI_GetActiveCount();
+        for (int i = 0; i < uiCount; i++)
         {
-            continue;
+            // Skip WiFi settings
+            if (ui[i].id == SETTING_WIFI_SSID || 
+                ui[i].id == SETTING_WIFI_PASSWORD)
+            {
+                continue;
+            }
+            parseField(buf, boundary, isMultipart, ui[i].id, fv);
         }
-        parseField(buf, boundary, isMultipart, SETTING_UI[i].id, fv);
     }
     
 exit:
@@ -452,9 +460,11 @@ static bool saveFormValues(FormValues* fv, char* resultBuffer, int bufferSize, i
     }
     
     // Save all other fields (data-driven!)
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
+    const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+    int uiCount = SettingUI_GetActiveCount();
+    for (int i = 0; i < uiCount; i++)
     {
-        SettingID setting = SETTING_UI[i].id;
+        SettingID setting = ui[i].id;
         
         // Skip WiFi settings
         if (setting == SETTING_WIFI_SSID || setting == SETTING_WIFI_PASSWORD)
@@ -479,7 +489,7 @@ static bool saveFormValues(FormValues* fv, char* resultBuffer, int bufferSize, i
         {
             ret = snprintf(&resultBuffer[*len], bufferSize - *len,
                 "<tr><td>%s</td><td>%s</td></tr>",
-                SETTING_UI[i].label, Validator_GetErrorMessage(validResult));
+                ui[i].label, Validator_GetErrorMessage(validResult));
             *len += (ret > 0 ? ret : 0);
             success = false;
             continue;
@@ -488,7 +498,7 @@ static bool saveFormValues(FormValues* fv, char* resultBuffer, int bufferSize, i
         bool saved = (DeviceConfig_Save(setting, value) == 0);
         ret = snprintf(&resultBuffer[*len], bufferSize - *len,
             "<tr><td>%s</td><td>%s</td></tr>",
-            SETTING_UI[i].label, saved ? "Saved" : "Save failed");
+            ui[i].label, saved ? "Saved" : "Save failed");
         *len += (ret > 0 ? ret : 0);
         if (!saved) success = false;
     }
@@ -672,12 +682,16 @@ static int webSettingsResultPage(httpd_request_t* req)
     initFormValues(&fv);
     
     // Calculate buffer size for certificates
-    for (int i = 0; i < (int)SETTING_UI_COUNT; i++)
     {
-        if (SETTING_UI[i].fieldType == UI_FIELD_TEXTAREA &&
-            DeviceConfig_IsSettingAvailable(SETTING_UI[i].id))
+        const SettingUIMetadata* ui = SettingUI_GetActiveArray();
+        int uiCount = SettingUI_GetActiveCount();
+        for (int i = 0; i < uiCount; i++)
         {
-            bufSize += DeviceConfig_GetMaxLen(SETTING_UI[i].id);
+            if (ui[i].fieldType == UI_FIELD_TEXTAREA &&
+                DeviceConfig_IsSettingAvailable(ui[i].id))
+            {
+                bufSize += DeviceConfig_GetMaxLen(ui[i].id);
+            }
         }
     }
     
