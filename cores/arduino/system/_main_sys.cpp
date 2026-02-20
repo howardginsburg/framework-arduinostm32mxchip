@@ -110,8 +110,6 @@ static void EnterAPMode()
 {
     pinMode(USER_BUTTON_B, INPUT);
 
-    Screen.print("IoT DevKit - AP");
-
     if (!InitSystemWiFi())
     {
         Serial.println("Set wifi AP Mode failed");
@@ -128,7 +126,7 @@ static void EnterAPMode()
     }
 
     Screen.print(1, ap_name);
-    Screen.print(2, "Configuration");
+    Screen.print(2, "Web Config");
     Screen.print(3, "192.168.0.1");
     
     Serial.printf("Soft AP %s is running...\r\n", ap_name);
@@ -141,9 +139,6 @@ extern void start_arduino(void);
 
 static void EnterUserMode()
 {
-    Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
-    //Serial.print("Press Button A and reset to enter configuration mode.\r\n");
-
     start_arduino();
 
     for (;;)
@@ -164,6 +159,13 @@ int main(void)
     DeviceConfig_LoadAll();
 
     __sys_setup();
+
+    // Show boot mode hints and allow time for the user to hold a button
+    Serial.print("You can 1. press Button A and reset to enter configuration mode.\r\n        2. press Button B and reset to enter AP mode.\r\n\r\n");
+    Screen.print("IoT DevKit");
+    Screen.print(1, "A: Config");
+    Screen.print(2, "B: Web Config");
+    wait_ms(2000);
 
     if (IsConfigurationMode())
     {
