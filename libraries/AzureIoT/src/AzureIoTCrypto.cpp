@@ -24,7 +24,7 @@ void AzureIoT_UrlEncode(const char* input, char* output, size_t outputSize)
         }
         else
         {
-            snprintf(&output[j], 4, "%%%02X", (unsigned char)c);
+            snprintf(&output[j], 4, "%%%02x", (unsigned char)c);
             j += 3;
         }
     }

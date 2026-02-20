@@ -434,6 +434,9 @@ bool azureIoTInit()
             Serial.println("[DPS] Failed to generate SAS token!");
             return false;
         }
+        // DPS requires skn=registration in the SAS token
+        size_t tokenLen = strlen(dpsSasToken);
+        snprintf(dpsSasToken + tokenLen, sizeof(dpsSasToken) - tokenLen, "&skn=registration");
     }
 
     // Register with DPS
