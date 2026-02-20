@@ -114,6 +114,8 @@ SensorData SensorManager::readAll()
     getAccelerometer(data.accelX, data.accelY, data.accelZ);
     getGyroscope(data.gyroX, data.gyroY, data.gyroZ);
     getMagnetometer(data.magX, data.magY, data.magZ);
+    data.buttonA     = isButtonAPressed();
+    data.buttonB     = isButtonBPressed();
 
     return data;
 }
@@ -170,6 +172,16 @@ void SensorManager::getMagnetometer(int32_t &x, int32_t &y, int32_t &z)
     z = axes[2];
 }
 
+bool SensorManager::isButtonAPressed()
+{
+    return digitalRead(USER_BUTTON_A) == LOW;
+}
+
+bool SensorManager::isButtonBPressed()
+{
+    return digitalRead(USER_BUTTON_B) == LOW;
+}
+
 int SensorManager::toJson(char *buf, size_t bufLen)
 {
     SensorData d = readAll();
@@ -180,11 +192,14 @@ int SensorManager::toJson(char *buf, size_t bufLen)
         "\"pressure\":%.2f,"
         "\"accelerometer\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
         "\"gyroscope\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
-        "\"magnetometer\":{\"x\":%ld,\"y\":%ld,\"z\":%ld}}",
+        "\"magnetometer\":{\"x\":%ld,\"y\":%ld,\"z\":%ld},"
+        "\"buttons\":{\"a\":%s,\"b\":%s}}",
         d.temperature, d.humidity, d.pressure,
         d.accelX, d.accelY, d.accelZ,
         d.gyroX,  d.gyroY,  d.gyroZ,
-        d.magX,   d.magY,   d.magZ);
+        d.magX,   d.magY,   d.magZ,
+        d.buttonA ? "true" : "false",
+        d.buttonB ? "true" : "false");
 
     return (n > 0 && (size_t)n < bufLen) ? n : 0;
 }

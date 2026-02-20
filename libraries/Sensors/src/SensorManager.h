@@ -44,6 +44,10 @@ struct SensorData
 
     // LIS2MDL – Magnetometer (mGauss)
     int32_t magX, magY, magZ;
+
+    // User buttons (true = pressed)
+    bool buttonA;
+    bool buttonB;
 };
 
 /**
@@ -95,6 +99,12 @@ public:
      * @param x, y, z  Output parameters.
      */
     void getMagnetometer(int32_t &x, int32_t &y, int32_t &z);
+
+    /** @return true if Button A is currently pressed */
+    bool isButtonAPressed();
+
+    /** @return true if Button B is currently pressed */
+    bool isButtonBPressed();
 
     /**
      * Read all sensors and return a JSON string.
