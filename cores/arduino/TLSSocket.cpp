@@ -3,8 +3,16 @@
 // Modified to use IoT Hub SDK-style buffering and polling
 
 #include "TLSSocket.h"
+#include "mbedtls/error.h"
 #include <stdlib.h>
 #include <string.h>
+
+static void tls_log_error(const char* label, int ret)
+{
+    char buf[128];
+    mbedtls_strerror(ret, buf, sizeof(buf));
+    printf("[TLS] %s: -0x%04X %s\r\n", label, (unsigned int)(-ret), buf);
+}
 
 #define TLS_CUNSTOM "Arduino TLS Socket"
 
@@ -291,12 +299,14 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
                       (const unsigned char *) TLS_CUNSTOM,
                       sizeof (TLS_CUNSTOM))) != 0)
     {
+        tls_log_error("drbg_seed", ret);
         return -1;
     }
 
     if ((ret = mbedtls_x509_crt_parse(&_cacert, (const unsigned char *)_ssl_ca_pem,
                        strlen(_ssl_ca_pem) + 1)) != 0)
     {
+        tls_log_error("CA cert parse", ret);
         return -1;
     }
 
@@ -305,6 +315,7 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
                     MBEDTLS_SSL_TRANSPORT_STREAM,
                     MBEDTLS_SSL_PRESET_DEFAULT)) != 0)
     {
+        tls_log_error("ssl_config_defaults", ret);
         return -1;
     }
 
@@ -322,17 +333,20 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
         if ((ret = mbedtls_x509_crt_parse(&_clientcert, (const unsigned char *)_ssl_client_cert,
                            strlen(_ssl_client_cert) + 1)) != 0)
         {
+            tls_log_error("client cert parse", ret);
             return -1;
         }
         
         if ((ret = mbedtls_pk_parse_key(&_clientkey, (const unsigned char *)_ssl_client_key,
                          strlen(_ssl_client_key) + 1, NULL, 0)) != 0)
         {
+            tls_log_error("private key parse", ret);
             return -1;
         }
         
         if ((ret = mbedtls_ssl_conf_own_cert(&_ssl_conf, &_clientcert, &_clientkey)) != 0)
         {
+            tls_log_error("ssl_conf_own_cert", ret);
             return -1;
         }
     }
@@ -345,6 +359,7 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
 
     if ((ret = mbedtls_ssl_setup(&_ssl, &_ssl_conf)) != 0)
     {
+        tls_log_error("ssl_setup", ret);
         return -1;
     }
     
@@ -357,8 +372,10 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     ret = _tcp_socket->connect(host, port);
     if (ret != NSAPI_ERROR_OK)
     {
+        printf("[TLS] TCP connect failed: %d\r\n", ret);
         return ret;
     }
+    printf("[TLS] TCP connected, starting handshake...\r\n");
     
     // IoT Hub SDK style: set socket to non-blocking for polling
     _tcp_socket->set_blocking(false);
@@ -373,9 +390,18 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     
     if (ret < 0) 
     {
+        tls_log_error("handshake", ret);
+        uint32_t flags = mbedtls_ssl_get_verify_result(&_ssl);
+        if (flags != 0)
+        {
+            char vrfy[512];
+            mbedtls_x509_crt_verify_info(vrfy, sizeof(vrfy), "  ! ", flags);
+            printf("[TLS] verify flags=0x%08X\r\n%s\r\n", (unsigned int)flags, vrfy);
+        }
         return -1;
     }
     
+    printf("[TLS] Handshake complete.\r\n");
     _handshake_complete = true;
     return NSAPI_ERROR_OK;
 }
