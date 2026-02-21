@@ -112,10 +112,11 @@ static const ProfileDefinition PROFILES[] = {
         {
             ZONE(3, ZONE_3_SIZE),   // SETTING_WIFI_SSID
             ZONE(10, ZONE_10_SIZE), // SETTING_WIFI_PASSWORD
-            ZONE(5, ZONE_5_SIZE),   // SETTING_BROKER_URL
+            ZONE(2, ZONE_2_SIZE),   // SETTING_BROKER_URL (moved to zone 2 to free zone 5 for CA cert)
             UNUSED_ZONE,            // SETTING_DEVICE_ID (extracted from cert CN)
             UNUSED_ZONE,            // SETTING_DEVICE_PASSWORD
-            ZONE(0, ZONE_0_SIZE),   // SETTING_CA_CERT
+            // CA_CERT spans zones 5+0 = 1560 bytes total
+            ZONE2(5, ZONE_5_SIZE, 0, ZONE_0_SIZE),  // SETTING_CA_CERT
             // CLIENT_CERT spans zones 6+7 = 1464 bytes total
             ZONE2(6, ZONE_6_SIZE, 7, ZONE_7_SIZE),  // SETTING_CLIENT_CERT
             ZONE(8, ZONE_8_SIZE),   // SETTING_CLIENT_KEY

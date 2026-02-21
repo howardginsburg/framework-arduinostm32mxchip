@@ -499,11 +499,6 @@ int httpd_get_data(httpd_request_t *req, char *content, int length)
 	int ret;
 	char *buf;
 
-	/* Is this condition required? */
-	if (req->body_nbytes >= HTTPD_MAX_MESSAGE - 2)
-		return -kInProgressErr;
-
-
 	buf = malloc(HTTPD_MAX_MESSAGE);
 	if (!buf) {
 		httpd_d("Failed to allocate memory for buffer");
@@ -523,18 +518,26 @@ int httpd_get_data(httpd_request_t *req, char *content, int length)
 		}
 	}
 
-	/* handle here */
-	ret = httpd_recv(req->sock, content,
-			length, 0);
-	if (ret == -1) {
-		httpd_d("Failed to read POST data");
-		goto out;
+	/* Read the full body, looping to handle TCP segmentation */
+	{
+		int to_read = (req->remaining_bytes < length) ?
+			req->remaining_bytes : length;
+		int total = 0;
+		while (total < to_read) {
+			ret = httpd_recv(req->sock, content + total,
+					to_read - total, 0);
+			if (ret <= 0) {
+				httpd_d("Failed to read POST data at offset %d",
+					total);
+				break;
+			}
+			total += ret;
+		}
+		content[total] = '\0';
+		req->remaining_bytes -= total;
+		httpd_d("Read %d bytes and remaining %d bytes",
+			total, req->remaining_bytes);
 	}
-	/* scratch will now have the JSON data */
-	content[ret] = '\0';
-	req->remaining_bytes -= ret;
-	httpd_d("Read %d bytes and remaining %d bytes",
-		ret, req->remaining_bytes);
 out:
 	free(buf);
 	return req->remaining_bytes;
