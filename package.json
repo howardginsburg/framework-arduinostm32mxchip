@@ -1,6 +1,6 @@
 {
   "name": "framework-arduinostm32mxchip",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Arduino Wiring-based Framework for the MXChip AZ3166 IoT DevKit (Community Fork with WiFiClientSecure)",
   "keywords": [
     "framework",
