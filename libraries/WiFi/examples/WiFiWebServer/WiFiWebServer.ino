@@ -54,7 +54,7 @@ void setup() {
 }
 
 void loop() {
-  Serial.println("list for incoming clients");
+  Serial.println("listen for incoming clients");
   // listen for incoming clients
   WiFiClient client = server.available();
   Serial.println("availabled");
@@ -74,7 +74,7 @@ void loop() {
         // so you can send a reply
         if (c == '\n' && currentLineIsBlank) {
           client.println("HTTP/1.1 200 OK");
-          client.println("nontent-Type: text/html");
+          client.println("Content-Type: text/html");
           client.println("Connection: close");
           client.println("Refresh: 5");
           client.println("");
@@ -96,7 +96,7 @@ void loop() {
 
     // close the connection:
     client.stop();
-    Serial.println("client disonnected");
+    Serial.println("client disconnected");
   }
 }
 

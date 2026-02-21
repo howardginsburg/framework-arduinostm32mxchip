@@ -148,7 +148,7 @@ unsigned long sendNTPpacket(char* address) {
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   //Serial.println("5");
   Udp.endPacket();
-  //Serial.println("6");
+  return 0;
 }
 
 

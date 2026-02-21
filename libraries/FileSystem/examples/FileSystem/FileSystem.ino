@@ -81,7 +81,7 @@ static int writeFile()
   FILE* fd = fopen("/fs/numbers.txt", "w");
   if (fd == NULL)
   {
-    Serial.printf("Open /fs/numbers.txt failed %d.\r\n", error);
+    Serial.printf("Open /fs/numbers.txt failed %d.\r\n", errno);
     return -1;
   }
   
