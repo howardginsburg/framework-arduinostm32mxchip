@@ -15,6 +15,7 @@ A community-maintained fork of the [Microsoft Azure IoT DevKit SDK](https://gith
 - [Framework Features](#framework-features)
 - [Sample Projects](#sample-projects)
 - [Getting Started](#getting-started)
+- [Changelog](#changelog)
 - [License](#license)
 
 ---
@@ -303,6 +304,17 @@ build_flags =
 
 platform_packages =
     framework-arduinostm32mxchip@https://github.com/howardginsburg/framework-arduinostm32mxchip.git
+```
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full release history and version notes. To pin a specific release in your project, reference a tag:
+
+```ini
+platform_packages =
+    framework-arduinostm32mxchip @ https://github.com/howardginsburg/framework-arduinostm32mxchip/archive/refs/tags/v2.1.0.zip
 ```
 
 ---
