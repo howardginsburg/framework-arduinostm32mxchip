@@ -13,7 +13,10 @@
 #include "SystemWiFi.h"
 #define _DEVICE_CONFIG_IMPL
 #include "config/DeviceConfig.h"
-#include "../../../libraries/Sensors/src/SensorManager.h"
+
+// Weak stub — does nothing when the Sensor library is not linked.
+// SensorManager.cpp overrides this with the real initialisation.
+extern "C" void __attribute__((weak)) sensor_framework_init() {}
 
 static bool Initialization(void)
 {
@@ -59,8 +62,8 @@ static bool Initialization(void)
     _green.write(0.0f);
     _blue.write(0.0f);
 
-    // Initialize all onboard sensors
-    Sensors.init();
+    // Initialize all onboard sensors (no-op if Sensor library is not linked)
+    sensor_framework_init();
 
     return true;
 }

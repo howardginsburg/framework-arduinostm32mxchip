@@ -9,6 +9,13 @@
 // Global instance — initialized by the framework in _main_sys.cpp
 SensorManager Sensors;
 
+// Strong override of the weak stub in _main_sys.cpp.
+// Automatically called by the framework at startup when this library is linked.
+extern "C" void sensor_framework_init()
+{
+    Sensors.init();
+}
+
 SensorManager::SensorManager()
     : _i2c(nullptr)
     , _hts221(nullptr)
