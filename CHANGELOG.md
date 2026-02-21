@@ -10,12 +10,20 @@ Pin a release in your `platformio.ini` by referencing its tag:
 
 ```ini
 platform_packages =
-    framework-arduinostm32mxchip @ https://github.com/howardginsburg/framework-arduinostm32mxchip/archive/refs/tags/v2.1.0.zip
+    framework-arduinostm32mxchip @ https://github.com/howardginsburg/framework-arduinostm32mxchip/archive/refs/tags/v2.2.1.zip
 ```
 
-Replace `v2.1.0` with any tag listed below.
+Replace `v2.2.1` with any tag listed below.
 
 > For instructions on creating a new release, see [RELEASING.md](RELEASING.md).
+
+---
+
+## [2.2.1] - 2026-02-21
+
+### Changed
+- `cores/arduino/system/_main_sys.cpp` — replaced the hard `SensorManager::init()` call with a weak-symbol hook (`sensor_framework_init`), making the Sensors library genuinely optional at link time
+- `libraries/Sensors/src/SensorManager.cpp` — provides the strong `sensor_framework_init` override that calls `Sensors.init()` when the library is linked
 
 ---
 
@@ -39,4 +47,5 @@ Replace `v2.1.0` with any tag listed below.
 - Board telemetry collector (defunct Microsoft telemetry service)
 - Original Paho MQTT library (did not support mTLS connections)
 
+[2.2.1]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.2.1
 [2.1.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.1.0
