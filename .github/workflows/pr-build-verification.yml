@@ -1,0 +1,168 @@
+# =============================================================================
+# PR Build Verification
+# =============================================================================
+#
+# Purpose
+# -------
+# Ensures that every pull request targeting main compiles cleanly across all
+# supported CONNECTION_PROFILE values before it can be merged.  A broken build
+# in any profile is caught immediately, not after a release is tagged.
+#
+# How it works
+# ------------
+# The job runs as a matrix: one parallel runner per profile.  Each runner:
+#   1. Checks out the PR branch.
+#   2. Installs PlatformIO via pip.
+#   3. Calls `pio ci` — PlatformIO's continuous-integration build command —
+#      pointing it at both verification sketch files and the local framework
+#      checkout via `symlink://`.
+#
+# The `symlink://` package reference is the key mechanism: it tells PlatformIO
+# to use the repository checkout as the framework source instead of downloading
+# the published release from GitHub.  This means the PR's own changes are what
+# gets compiled.
+#
+# Sketch file
+# -----------
+# A single verification sketch, tests/build_check.cpp, is passed to every
+# `pio ci` invocation.  It contains:
+#
+#   Core section   — headers for all platform libraries (WiFi, Sensors, SPI,
+#                    Wire, FileSystem, etc.) compiled in every profile.
+#   Profile section — #if guards keyed on CONNECTION_PROFILE that add only
+#                    the libraries relevant to the active profile:
+#                      PROFILE_NONE (0)       — core only
+#                      PROFILE_MQTT_* (1-3)   — PubSubClient, WebSocketClient
+#                      PROFILE_IOTHUB_* (4-5) — above + AzureIoTHub, AzureIoTCrypto
+#                      PROFILE_DPS_* (6-8)    — above + AzureIoTHub, AzureIoTCrypto
+#
+# Caching
+# -------
+# The ~/.platformio directory (toolchains, platform packages, etc.) is cached
+# and keyed on the two sketch files.  On a cache hit the ~500 MB toolchain
+# download is skipped, making repeat runs much faster.  The restore-keys
+# fallback allows a partial cache hit if only one sketch changed.
+#
+# fail-fast: false
+# ----------------
+# All matrix jobs always run to completion even if one fails.  This gives a
+# complete picture of which profiles are broken rather than stopping at the
+# first failure.
+#
+# Triggers
+# --------
+#   pull_request  — runs automatically on every PR targeting main.
+#   workflow_dispatch — allows a manual run from the Actions tab for debugging.
+#
+# =============================================================================
+
+name: PR Build Verification
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Run all matrix jobs even if one fails so the full failure picture is
+      # visible in the PR checks summary.
+      fail-fast: false
+
+      matrix:
+        include:
+          # ------------------------------------------------------------------
+          # Core / MQTT profiles
+          # AzureIoT library is excluded via lib_ignore so its #error guard
+          # (which rejects non-Azure profiles) never fires.
+          # ------------------------------------------------------------------
+          - profile: PROFILE_NONE
+            lib_ignore: AzureIoT
+          - profile: PROFILE_MQTT_USERPASS
+            lib_ignore: AzureIoT
+          - profile: PROFILE_MQTT_USERPASS_TLS
+            lib_ignore: AzureIoT
+          - profile: PROFILE_MQTT_MTLS
+            lib_ignore: AzureIoT
+
+          # ------------------------------------------------------------------
+          # Azure IoT Hub / DPS profiles
+          # AzureIoT library is compiled in full.  Each profile exercises a
+          # distinct #if branch inside AzureIoTHub.cpp:
+          #   PROFILE_IOTHUB_SAS      — direct Hub, SAS token
+          #   PROFILE_IOTHUB_CERT     — direct Hub, X.509 certificate
+          #   PROFILE_DPS_SAS         — DPS, individual symmetric key
+          #   PROFILE_DPS_SAS_GROUP   — DPS, group symmetric key
+          #   PROFILE_DPS_CERT        — DPS, X.509 certificate
+          # ------------------------------------------------------------------
+          - profile: PROFILE_IOTHUB_SAS
+            lib_ignore: ""
+          - profile: PROFILE_IOTHUB_CERT
+            lib_ignore: ""
+          - profile: PROFILE_DPS_SAS
+            lib_ignore: ""
+          - profile: PROFILE_DPS_SAS_GROUP
+            lib_ignore: ""
+          - profile: PROFILE_DPS_CERT
+            lib_ignore: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          # Cache the entire PlatformIO home directory: toolchains (~500 MB),
+          # platform packages, and library indices.  Keyed on both sketch files
+          # so the cache is invalidated if either changes.
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('tests/build_check.cpp') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build (${{ matrix.profile }})
+        # Key flags:
+        #
+        #   --board=mxchip_az3166
+        #     Selects the target board, which determines the MCU, linker
+        #     script, and upload tool.
+        #
+        #   -O "framework=arduino"
+        #     Sets the framework for this build (equivalent to writing
+        #     `framework = arduino` in platformio.ini).
+        #
+        #   -O "build_flags=-DCONNECTION_PROFILE=..."
+        #     Injects the profile preprocessor macro so framework and library
+        #     code can conditionally compile the correct code path.
+        #
+        #   -O "lib_ignore=..."
+        #     For non-Azure profiles: excludes the AzureIoT library from
+        #     compilation entirely.  AzureIoTHub.cpp contains a compile-time
+        #     #error that rejects non-Azure profiles, so it must not be
+        #     compiled for PROFILE_NONE or PROFILE_MQTT_*.  Azure profiles
+        #     set this to an empty string so nothing is excluded.
+        #
+        #   -O "platform_packages=framework-arduinostm32mxchip @ symlink://..."
+        #     Replaces the published framework package with a symlink to the
+        #     current repository checkout, so this PR's changes are compiled
+        #     rather than the last published release.
+        run: |
+          pio ci tests/build_check.cpp \
+            --board=mxchip_az3166 \
+            -O "framework=arduino" \
+            -O "build_flags=-DCONNECTION_PROFILE=${{ matrix.profile }}" \
+            -O "lib_ignore=${{ matrix.lib_ignore }}" \
+            -O "platform_packages=framework-arduinostm32mxchip @ symlink://${{ github.workspace }}"
