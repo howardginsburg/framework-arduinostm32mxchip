@@ -68,7 +68,7 @@ static const SettingUIMetadata SETTING_UI[] = {
     {SETTING_DEVICE_CERT,      "Device Certificate",     "set_devicecert",  "DeviceCert",       "Device X.509 Certificate (PEM)",             NULL, UI_FIELD_TEXTAREA},
 
     // Operational settings (stored in config file for unlimited expansion)
-    {SETTING_SEND_INTERVAL,    "Send Interval",          "set_sendinterval","SendInterval",     "Message send interval (seconds)",            "30", UI_FIELD_NUMBER},
+    {SETTING_SEND_INTERVAL,    "Send Interval (sec)",    "set_sendinterval","SendInterval",     "Message send interval (seconds)",            "30", UI_FIELD_NUMBER},
     {SETTING_PUBLISH_TOPIC,    "Publish Topic",          "set_pubtopic",    "PublishTopic",     "MQTT publish topic",                         NULL, UI_FIELD_TEXT},
     {SETTING_SUBSCRIBE_TOPIC,  "Subscribe Topic",        "set_subtopic",    "SubscribeTopic",   "MQTT subscribe topic",                       NULL, UI_FIELD_TEXT},
 };

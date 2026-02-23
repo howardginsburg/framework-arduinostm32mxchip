@@ -163,8 +163,8 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
             UNUSED_ZONE,            // SETTING_DEVICE_CERT
             FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
-            FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),   // SETTING_PUBLISH_TOPIC
-            FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)  // SETTING_SUBSCRIBE_TOPIC
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -190,8 +190,8 @@ static const ProfileDefinition PROFILES[] = {
             // DEVICE_CERT spans zones 0+7+8 = 2640 bytes total
             ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE),  // SETTING_DEVICE_CERT
             FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
-            FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),   // SETTING_PUBLISH_TOPIC
-            FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)  // SETTING_SUBSCRIBE_TOPIC
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     

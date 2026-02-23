@@ -18,12 +18,15 @@
 #define _DEVICE_CONFIG_IMPL
 #include "DeviceConfigFile.h"
 #include "DeviceConfigZones.h"
-#include <stdio.h>
+#include "SystemFileSystem.h"
+#include "File.h"
 #include <string.h>
 #include <stdlib.h>
 
-// Path to the configuration file on the SFlash filesystem
-#define CONFIG_FILE_PATH "/fs/device.cfg"
+using namespace mbed;
+
+// Filename within the mounted filesystem (leading '/' required by ChaN follow_path with _FS_RPATH=0)
+#define CONFIG_FILE_NAME "/device.cfg"
 
 // Maximum line length in the config file (key + '=' + value + '\n' + '\0')
 #define CONFIG_LINE_MAX  (64 + 1 + MAX_SUBSCRIBE_TOPIC_SIZE + 2)
@@ -78,13 +81,23 @@ static const char* get_file_key(SettingID setting)
 /**
  * @brief Read the value for @p key from the config file into @p buffer.
  *
+ * Uses the mbed::File C++ API directly on the mounted FATFileSystem
+ * to bypass the POSIX path-routing layer (fopen).
+ *
  * @return Number of bytes written to buffer (incl. '\0') if found,
- *         0 if key not found, -1 on I/O error.
+ *         0 if key not found or file absent, -1 on I/O error.
  */
 static int read_key_from_file(const char* key, char* buffer, int bufferSize)
 {
-    FILE* fp = fopen(CONFIG_FILE_PATH, "r");
-    if (fp == NULL)
+    FileSystem* fs = SystemFileSystem_GetFS();
+    if (fs == NULL)
+    {
+        buffer[0] = '\0';
+        return 0;
+    }
+
+    File f;
+    if (f.open(fs, CONFIG_FILE_NAME, O_RDONLY) != 0)
     {
         // File doesn't exist yet — treat as empty
         buffer[0] = '\0';
@@ -93,37 +106,59 @@ static int read_key_from_file(const char* key, char* buffer, int bufferSize)
 
     int keyLen = (int)strlen(key);
     char line[CONFIG_LINE_MAX];
+    int linePos = 0;
     int found = 0;
+    char ch;
 
-    while (fgets(line, sizeof(line), fp) != NULL)
+    while (f.read(&ch, 1) == 1)
     {
-        // Skip comments and blank lines
-        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r')
+        if (ch == '\n' || ch == '\r')
         {
-            continue;
-        }
+            if (linePos > 0)
+            {
+                line[linePos] = '\0';
 
-        // Match "KEY="
-        if (strncmp(line, key, keyLen) == 0 && line[keyLen] == '=')
+                if (line[0] != '#' &&
+                    linePos >= keyLen + 1 &&
+                    strncmp(line, key, keyLen) == 0 &&
+                    line[keyLen] == '=')
+                {
+                    const char* valStart = line + keyLen + 1;
+                    int valLen = (int)strlen(valStart);
+                    int copyLen = (valLen < bufferSize - 1) ? valLen : bufferSize - 1;
+                    strncpy(buffer, valStart, copyLen);
+                    buffer[copyLen] = '\0';
+                    found = copyLen + 1;
+                    break;
+                }
+                linePos = 0;
+            }
+        }
+        else if (linePos < (int)(sizeof(line) - 1))
+        {
+            line[linePos++] = ch;
+        }
+    }
+
+    // Handle last line with no trailing newline
+    if (!found && linePos > 0)
+    {
+        line[linePos] = '\0';
+        if (line[0] != '#' &&
+            linePos >= keyLen + 1 &&
+            strncmp(line, key, keyLen) == 0 &&
+            line[keyLen] == '=')
         {
             const char* valStart = line + keyLen + 1;
-
-            // Strip trailing newline characters
             int valLen = (int)strlen(valStart);
-            while (valLen > 0 && (valStart[valLen - 1] == '\n' || valStart[valLen - 1] == '\r'))
-            {
-                valLen--;
-            }
-
             int copyLen = (valLen < bufferSize - 1) ? valLen : bufferSize - 1;
             strncpy(buffer, valStart, copyLen);
             buffer[copyLen] = '\0';
             found = copyLen + 1;
-            break;
         }
     }
 
-    fclose(fp);
+    f.close();
 
     if (!found)
     {
@@ -135,46 +170,46 @@ static int read_key_from_file(const char* key, char* buffer, int bufferSize)
 /**
  * @brief Write (create or update) @p key=@p value in the config file.
  *
+ * Uses the mbed::File C++ API directly to bypass the POSIX path-routing layer.
+ *
  * Strategy:
  *   1. Read the existing file into a temporary buffer.
  *   2. Replace the matching key line if found, or append it.
- *   3. Rewrite the file atomically (overwrite with "w").
+ *   3. Rewrite the file (O_WRONLY | O_CREAT | O_TRUNC).
  *
  * @return 0 on success, -1 on failure.
  */
 static int write_key_to_file(const char* key, const char* value)
 {
+    FileSystem* fs = SystemFileSystem_GetFS();
+    if (fs == NULL)
+    {
+        return -1;
+    }
+
     // -------------------------------------------------------------------------
     // Step 1 – Read existing content
     // -------------------------------------------------------------------------
     char* existingContent = NULL;
-    long fileSize = 0;
+    int fileSize = 0;
 
-    FILE* fp = fopen(CONFIG_FILE_PATH, "r");
-    if (fp != NULL)
     {
-        fseek(fp, 0, SEEK_END);
-        fileSize = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-
-        if (fileSize > 0)
+        File rf;
+        if (rf.open(fs, CONFIG_FILE_NAME, O_RDONLY) == 0)
         {
-            // Sanity-check to avoid overflow in fileSize + 1
-            if (fileSize > 65536L)
+            fileSize = (int)rf.size();
+            if (fileSize > 0 && fileSize <= 65536)
             {
-                fclose(fp);
-                return -1;
+                existingContent = (char*)malloc(fileSize + 1);
+                if (existingContent != NULL)
+                {
+                    int readBytes = (int)rf.read(existingContent, fileSize);
+                    existingContent[readBytes] = '\0';
+                    fileSize = readBytes;
+                }
             }
-            existingContent = (char*)malloc(fileSize + 1);
-            if (existingContent == NULL)
-            {
-                fclose(fp);
-                return -1;
-            }
-            int readBytes = (int)fread(existingContent, 1, fileSize, fp);
-            existingContent[readBytes] = '\0';
+            rf.close();
         }
-        fclose(fp);
     }
 
     // -------------------------------------------------------------------------
@@ -182,8 +217,7 @@ static int write_key_to_file(const char* key, const char* value)
     // -------------------------------------------------------------------------
     int keyLen   = (int)strlen(key);
     int valueLen = (int)strlen(value);
-    // Allocate worst-case: existing content + new line
-    int newSize = (int)fileSize + keyLen + 1 + valueLen + 2 + 1;
+    int newSize  = fileSize + keyLen + 1 + valueLen + 2 + 1;
     char* newContent = (char*)malloc(newSize);
     if (newContent == NULL)
     {
@@ -199,7 +233,6 @@ static int write_key_to_file(const char* key, const char* value)
         char* lineStart = existingContent;
         while (*lineStart != '\0')
         {
-            // Find end of this line
             char* lineEnd = lineStart;
             while (*lineEnd != '\0' && *lineEnd != '\n')
             {
@@ -212,7 +245,6 @@ static int write_key_to_file(const char* key, const char* value)
                 strncmp(lineStart, key, keyLen) == 0 &&
                 lineStart[keyLen] == '=')
             {
-                // Replace this line
                 strcat(newContent, key);
                 strcat(newContent, "=");
                 strcat(newContent, value);
@@ -221,43 +253,38 @@ static int write_key_to_file(const char* key, const char* value)
             }
             else
             {
-                // Keep original line (including newline if present)
                 int copyLen = atEof ? lineLen : lineLen + 1;
                 strncat(newContent, lineStart, copyLen);
             }
 
-            if (atEof)
-            {
-                break;
-            }
+            if (atEof) break;
             lineStart = lineEnd + 1;
         }
+        free(existingContent);
     }
 
     if (!replaced)
     {
-        // Append new key
         strcat(newContent, key);
         strcat(newContent, "=");
         strcat(newContent, value);
         strcat(newContent, "\n");
     }
 
-    free(existingContent);
-
     // -------------------------------------------------------------------------
     // Step 3 – Rewrite file
     // -------------------------------------------------------------------------
-    fp = fopen(CONFIG_FILE_PATH, "w");
-    if (fp == NULL)
+    File wf;
+    int err = wf.open(fs, CONFIG_FILE_NAME, O_WRONLY | O_CREAT | O_TRUNC);
+    if (err != 0)
     {
         free(newContent);
         return -1;
     }
 
     int toWrite = (int)strlen(newContent);
-    int written = (int)fwrite(newContent, 1, toWrite, fp);
-    fclose(fp);
+    int written = (int)wf.write(newContent, toWrite);
+    wf.close();
     free(newContent);
 
     return (written == toWrite) ? 0 : -1;

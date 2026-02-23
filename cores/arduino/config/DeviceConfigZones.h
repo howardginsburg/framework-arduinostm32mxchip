@@ -107,6 +107,21 @@ extern "C" {
 /** Maximum client key size */
 #define MAX_CLIENT_KEY_SIZE ZONE_8_SIZE
 
+/** Maximum connection string size (IoT Hub SAS / Cert — zone 5) */
+#define MAX_CONNECTION_STRING_SIZE ZONE_5_SIZE
+
+/** Maximum DPS endpoint size (zone 5 or zone 2 depending on profile) */
+#define MAX_DPS_ENDPOINT_SIZE ZONE_5_SIZE
+
+/** Maximum scope ID size (zone 5 or zone 2 depending on profile) */
+#define MAX_SCOPE_ID_SIZE ZONE_5_SIZE
+
+/** Maximum registration ID size (zone 6) */
+#define MAX_REGISTRATION_ID_SIZE ZONE_6_SIZE
+
+/** Maximum symmetric key size (zone 7) */
+#define MAX_SYMMETRIC_KEY_SIZE ZONE_7_SIZE
+
 #ifdef __cplusplus
 }
 #endif

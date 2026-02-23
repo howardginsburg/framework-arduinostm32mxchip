@@ -23,6 +23,7 @@
 
 static char s_wifiSsid[ZONE_3_SIZE];
 static char s_wifiPassword[ZONE_10_SIZE];
+static char s_devicePassword[ZONE_6_SIZE];
 static char s_brokerUrl[ZONE_5_SIZE];
 static char s_brokerHost[ZONE_5_SIZE];
 static int  s_brokerPort = 8883;
@@ -241,7 +242,18 @@ bool DeviceConfig_LoadAll(void)
             success = false;
         }
     }
-    
+
+    // Load Device Password (for username/password profiles)
+    s_devicePassword[0] = '\0';
+    if (DeviceConfig_IsSettingAvailable(SETTING_DEVICE_PASSWORD))
+    {
+        if (DeviceConfig_Read(SETTING_DEVICE_PASSWORD, s_devicePassword, sizeof(s_devicePassword)) < 0)
+        {
+            s_devicePassword[0] = '\0';
+            success = false;
+        }
+    }
+
     // Load Broker URL (for MQTT profiles)
     if (DeviceConfig_IsSettingAvailable(SETTING_BROKER_URL))
     {
@@ -369,6 +381,11 @@ const char* DeviceConfig_GetWifiSsid(void)
 const char* DeviceConfig_GetWifiPassword(void)
 {
     return s_wifiPassword;
+}
+
+const char* DeviceConfig_GetDevicePassword(void)
+{
+    return s_devicePassword;
 }
 
 const char* DeviceConfig_GetBrokerHost(void)

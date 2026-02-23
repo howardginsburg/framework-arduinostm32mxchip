@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "DeviceConfigZones.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -200,6 +201,12 @@ const char* DeviceConfig_GetWifiSsid(void);
  * @return Pointer to WiFi password string (valid after DeviceConfig_LoadAll)
  */
 const char* DeviceConfig_GetWifiPassword(void);
+
+/**
+ * @brief Get device password (username/password profiles)
+ * @return Device password string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetDevicePassword(void);
 
 /**
  * @brief Get broker/server host
