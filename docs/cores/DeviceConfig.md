@@ -10,7 +10,8 @@ Profile-based configuration system for managing device credentials and connectio
 
 The DeviceConfig system provides:
 - **Connection profiles** — predefined configurations for MQTT, Azure IoT Hub, and DPS
-- **Zone mapping** — maps logical settings to physical EEPROM zones
+- **Zone mapping** — maps logical settings to physical EEPROM zones or to the SFlash config file
+- **Config-file backed settings** — three operational settings (`SETTING_SEND_INTERVAL`, `SETTING_PUBLISH_TOPIC`, `SETTING_SUBSCRIBE_TOPIC`) stored in `/fs/device.cfg` on the onboard SFlash FAT filesystem, enabling unlimited expansion beyond fixed EEPROM zones
 - **Validation** — format and length checks for all setting types
 - **CLI integration** — serial commands for reading/writing settings
 - **Web UI metadata** — labels, placeholders, and field types for the config web server
@@ -57,6 +58,9 @@ Set the active profile at compile time:
 | `SETTING_REGISTRATION_ID` | DPS registration ID |
 | `SETTING_SYMMETRIC_KEY` | Symmetric key |
 | `SETTING_DEVICE_CERT` | Device certificate (PEM) |
+| `SETTING_SEND_INTERVAL` | Message send interval in seconds (config file) |
+| `SETTING_PUBLISH_TOPIC` | MQTT publish topic (config file) |
+| `SETTING_SUBSCRIBE_TOPIC` | MQTT subscribe topic (config file) |
 
 ---
 
@@ -83,12 +87,21 @@ Set the active profile at compile time:
 |----------|-------------|
 | `const char* DeviceConfig_GetWifiSsid(void)` | Get WiFi SSID |
 | `const char* DeviceConfig_GetWifiPassword(void)` | Get WiFi password |
+| `const char* DeviceConfig_GetDevicePassword(void)` | Get device password (MQTT_USERPASS profiles) |
 | `const char* DeviceConfig_GetBrokerHost(void)` | Get broker hostname |
 | `int DeviceConfig_GetBrokerPort(void)` | Get broker port |
 | `const char* DeviceConfig_GetCACert(void)` | Get CA certificate |
 | `const char* DeviceConfig_GetClientCert(void)` | Get client certificate |
 | `const char* DeviceConfig_GetClientKey(void)` | Get client private key |
 | `const char* DeviceConfig_GetDeviceId(void)` | Get device ID |
+| `int DeviceConfig_GetSendInterval(void)` | Get message send interval in seconds (default: 30) |
+| `const char* DeviceConfig_GetPublishTopic(void)` | Get MQTT publish topic |
+| `const char* DeviceConfig_GetSubscribeTopic(void)` | Get MQTT subscribe topic |
+| `const char* DeviceConfig_GetConnectionString(void)` | Get IoT Hub connection string |
+| `const char* DeviceConfig_GetDpsEndpoint(void)` | Get DPS endpoint URL |
+| `const char* DeviceConfig_GetScopeId(void)` | Get DPS scope ID |
+| `const char* DeviceConfig_GetRegistrationId(void)` | Get DPS registration ID |
+| `const char* DeviceConfig_GetSymmetricKey(void)` | Get DPS symmetric key |
 
 ---
 
@@ -98,10 +111,34 @@ Each profile defines which EEPROM zones store which settings. Mappings support u
 
 ```c
 typedef struct {
-    uint8_t zones[MAX_ZONES_PER_SETTING];    // Zone indices (0xFF = unused)
+    uint8_t zones[MAX_ZONES_PER_SETTING];    // Zone indices (0xFF = unused, 0xFE = file-backed)
     uint16_t zoneSizes[MAX_ZONES_PER_SETTING];
 } ZoneMapping;
 ```
+
+### File-Backed Settings
+
+Three settings use the SFlash config file instead of EEPROM zones. Their `ZoneMapping` has `FILE_ZONE_MARKER` (`0xFE`) in `zones[0]`, which instructs the storage layer to read/write `/fs/device.cfg` via `DeviceConfigFile.h`.
+
+```cpp
+#include "config/DeviceConfigFile.h"
+```
+
+| Function | Description |
+|----------|-------------|
+| `int ConfigFile_Save(SettingID setting, const char* value)` | Write a setting to the config file |
+| `int ConfigFile_Read(SettingID setting, char* buffer, int bufferSize)` | Read a setting from the config file |
+
+The config file format is plain `key=value` lines (one per setting). Lines beginning with `#` are comments and are preserved. The file is created automatically on first write.
+
+```
+# /fs/device.cfg
+send_interval=30
+publish_topic=devices/mydevice/messages/events/
+subscribe_topic=devices/mydevice/messages/devicebound/#
+```
+
+> **Note:** The framework mounts the SFlash FAT filesystem at `/fs/` automatically before `DeviceConfig_LoadAll()`. Do not create a separate `FATFileSystem("fs")` instance in your sketch — the framework owns this mount point. See `SystemFileSystem.h` for details.
 
 ### Combined Buffer Sizes
 
@@ -111,6 +148,9 @@ typedef struct {
 | `MAX_CLIENT_CERT_SIZE` | 1464 | Client certificate buffer |
 | `MAX_DEVICE_CERT_SIZE` | 2640 | Device certificate buffer |
 | `MAX_CLIENT_KEY_SIZE` | 880 | Client private key buffer |
+| `MAX_SEND_INTERVAL_SIZE` | 16 | Send interval string buffer (config file) |
+| `MAX_PUBLISH_TOPIC_SIZE` | 256 | Publish topic buffer (config file) |
+| `MAX_SUBSCRIBE_TOPIC_SIZE` | 256 | Subscribe topic buffer (config file) |
 
 ---
 
@@ -205,3 +245,4 @@ typedef struct {
 - [EEPROM](EEPROM.md) — Underlying storage zones
 - [HTTP Server](HTTPServer.md) — Web configuration server
 - [System Services](SystemServices.md) — WiFi connection using saved credentials
+- [FileSystem](../libraries/FileSystem.md) — SFlash block device and FAT filesystem utilities

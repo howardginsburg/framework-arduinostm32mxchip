@@ -76,7 +76,10 @@ static const ProfileDefinition CUSTOM_PROFILE = {
         UNUSED_ZONE,                        // SETTING_SCOPE_ID          — not used
         UNUSED_ZONE,                        // SETTING_REGISTRATION_ID   — not used
         UNUSED_ZONE,                        // SETTING_SYMMETRIC_KEY     — not used
-        UNUSED_ZONE                         // SETTING_DEVICE_CERT       — not used
+        UNUSED_ZONE,                        // SETTING_DEVICE_CERT       — not used
+        UNUSED_ZONE,                        // SETTING_SEND_INTERVAL     — not used (file-backed)
+        UNUSED_ZONE,                        // SETTING_PUBLISH_TOPIC     — not used (file-backed)
+        UNUSED_ZONE                         // SETTING_SUBSCRIBE_TOPIC   — not used (file-backed)
     }
 };
 
@@ -232,6 +235,9 @@ These are the setting IDs you can map to zones. Every `ProfileDefinition.mapping
 | 11 | `SETTING_REGISTRATION_ID` | Azure DPS registration ID | Any string (680 bytes) |
 | 12 | `SETTING_SYMMETRIC_KEY` | Azure DPS symmetric key | Any string (784 bytes) |
 | 13 | `SETTING_DEVICE_CERT` | Device certificate for Azure (PEM) | Any large text (can span zones) |
+| 14 | `SETTING_SEND_INTERVAL` | Message send interval (seconds) | Use `FILE_ZONE(MAX_SEND_INTERVAL_SIZE)` or `UNUSED_ZONE` |
+| 15 | `SETTING_PUBLISH_TOPIC` | MQTT publish topic | Use `FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE)` or `UNUSED_ZONE` |
+| 16 | `SETTING_SUBSCRIBE_TOPIC` | MQTT subscribe topic | Use `FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)` or `UNUSED_ZONE` |
 
 ---
 
@@ -264,6 +270,7 @@ These macros (from `DeviceConfigZones.h`) simplify zone mapping definitions in y
 | `ZONE(z, s)` | Single zone | Maps to zone `z` with size `s` |
 | `ZONE2(z1, s1, z2, s2)` | Two zones | Data spans `z1` then `z2` sequentially |
 | `ZONE3(z1, s1, z2, s2, z3, s3)` | Three zones | Data spans `z1`, `z2`, then `z3` |
+| `FILE_ZONE(s)` | Config-file setting | Stores the value in `/fs/device.cfg` instead of EEPROM; `s` is the max length in bytes |
 
 For multi-zone settings, data is written and read sequentially — the first `s1` bytes go to `z1`, the next `s2` bytes to `z2`, etc. There is no overhead or padding between zones.
 
@@ -315,7 +322,10 @@ static const ProfileDefinition CUSTOM_PROFILE = {
         UNUSED_ZONE,                             // SETTING_SCOPE_ID
         UNUSED_ZONE,                             // SETTING_REGISTRATION_ID
         UNUSED_ZONE,                             // SETTING_SYMMETRIC_KEY
-        UNUSED_ZONE                              // SETTING_DEVICE_CERT
+        UNUSED_ZONE,                             // SETTING_DEVICE_CERT
+        UNUSED_ZONE,                             // SETTING_SEND_INTERVAL     (file-backed, not used)
+        UNUSED_ZONE,                             // SETTING_PUBLISH_TOPIC     (file-backed, not used)
+        UNUSED_ZONE                              // SETTING_SUBSCRIBE_TOPIC   (file-backed, not used)
     }
 };
 
@@ -427,7 +437,10 @@ static const ProfileDefinition CUSTOM_PROFILE = {
         UNUSED_ZONE,                             // SETTING_SCOPE_ID
         UNUSED_ZONE,                             // SETTING_REGISTRATION_ID
         UNUSED_ZONE,                             // SETTING_SYMMETRIC_KEY
-        UNUSED_ZONE                              // SETTING_DEVICE_CERT
+        UNUSED_ZONE,                             // SETTING_DEVICE_CERT
+        UNUSED_ZONE,                             // SETTING_SEND_INTERVAL     (file-backed, not used)
+        UNUSED_ZONE,                             // SETTING_PUBLISH_TOPIC     (file-backed, not used)
+        UNUSED_ZONE                              // SETTING_SUBSCRIBE_TOPIC   (file-backed, not used)
     }
 };
 
@@ -465,6 +478,8 @@ The web configuration page also uses these labels and placeholder text automatic
 
 ## Tips and Constraints
 
+- **`SETTING_COUNT` is now 17.** Every `CUSTOM_PROFILE` mappings array must have exactly 17 entries — one for each `SettingID` up to and including `SETTING_SUBSCRIBE_TOPIC`. The three new entries (indices 14–16) are for the file-backed operational settings; use `UNUSED_ZONE` for them unless your custom profile needs to expose those settings.
+- **File-backed settings in custom profiles.** The `FILE_ZONE(s)` macro (defined in `DeviceConfigZones.h`) marks a setting as stored in `/fs/device.cfg` rather than EEPROM. You can use it for the three operational settings (`SETTING_SEND_INTERVAL`, `SETTING_PUBLISH_TOPIC`, `SETTING_SUBSCRIBE_TOPIC`) in your custom profile if you want to expose them through the CLI or web UI.
 - **No framework edits required.** Everything is defined in your project via `custom_profile.h` and the build flag.
 - **Zone exclusivity:** Each zone can only be assigned to one setting per profile. The framework does not detect conflicts at compile time — overlapping zones will silently corrupt data.
 - **WiFi convention:** Zones 3 and 10 are conventionally used for WiFi SSID and password. You can reassign them, but the web UI WiFi scanner assumes these zones.

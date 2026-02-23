@@ -102,13 +102,15 @@ This fork includes significant modifications from the original SDK:
 | **WiFiClientSecure** | Arduino-compatible TLS client for use with any MQTT library (e.g., PubSubClient) |
 | **TLSSocket improvements** | Revamped the TLS socket layer to remediate bugs, etc when using MQTT mTLS (see [TLSPATCH.md](docs/TLSPATCH.md)) |
 | **Connection Profiles** | Pre-defined connection profiles for MQTT, Azure IoT Hub, and Azure DPS |
-| **DeviceConfig System** | Unified configuration storage with multi-zone support for large certificates |
+| **DeviceConfig System** | Unified configuration storage: security-sensitive settings in the STSAFE secure element; operational settings (`send_interval`, `publish_topic`, `subscribe_topic`) in a config file on SFlash |
+| **Config-file backed settings** | `SETTING_SEND_INTERVAL`, `SETTING_PUBLISH_TOPIC`, and `SETTING_SUBSCRIBE_TOPIC` stored in `/fs/device.cfg` on the onboard SFlash FAT filesystem, configurable via CLI and Web UI |
+| **SystemFileSystem** | Framework-owned FAT filesystem mount at `/fs/`; auto-provisioned at boot so file-backed settings are ready before `setup()` runs |
 | **SensorManager** | Simple API for all onboard sensors (temperature, humidity, pressure, IMU, magnetometer) |
 | **AzureIoT Library** | Complete Azure IoT Hub client with DPS provisioning, SAS token generation, and Device Twin support |
 | **PubSubClient Library** | Bundled MQTT client library (Nick O'Leary, MIT license) — no external lib_deps needed |
 | **Updated Web Configuration UI** | Browser-based setup via WiFi AP mode |
 | **Input Validation** | Centralized validation for URLs, certificates, and connection strings |
-| **Updated CLI commands** | Extensible serial commands for all configuration settings |
+| **Updated CLI commands** | Extensible serial commands for all configuration settings, including `set_interval`, `set_pubtopic`, and `set_subtopic` |
 
 ---
 
@@ -137,7 +139,7 @@ See [Getting Started](docs/GettingStarted.md#step-3-choose-a-connection-profile)
 
 ### DeviceConfig
 
-The `DeviceConfig` system provides unified access to configuration stored in the STSAFE secure element. Configuration is loaded automatically at startup based on your connection profile.
+The `DeviceConfig` system provides unified access to configuration. Security-sensitive settings (certificates, keys, passwords, connection strings) are stored in the STSAFE secure element. Operational settings are stored in a plain-text config file (`/fs/device.cfg`) on the onboard SFlash FAT filesystem, which is mounted automatically by the framework at boot.
 
 ```cpp
 #include <DeviceConfig.h>
@@ -155,6 +157,11 @@ const char* clientKey = DeviceConfig_GetClientKey();
 
 // Device identity (extracted from cert CN or connection string)
 const char* deviceId = DeviceConfig_GetDeviceId();
+
+// Operational settings (stored in /fs/device.cfg on SFlash)
+int sendInterval = DeviceConfig_GetSendInterval();      // seconds, default 30
+const char* pubTopic = DeviceConfig_GetPublishTopic();
+const char* subTopic = DeviceConfig_GetSubscribeTopic();
 ```
 
 ### SensorManager
@@ -228,11 +235,11 @@ void setup() {
 void loop() {
     if (!mqtt.connected()) {
         mqtt.connect(DeviceConfig_GetDeviceId());
-        mqtt.subscribe("commands/#");
+        mqtt.subscribe(DeviceConfig_GetSubscribeTopic());
     }
-    mqtt.publish("telemetry", Sensors.toJson());
+    mqtt.publish(DeviceConfig_GetPublishTopic(), Sensors.toJson());
     mqtt.loop();
-    delay(5000);
+    delay(DeviceConfig_GetSendInterval() * 1000);
 }
 ```
 

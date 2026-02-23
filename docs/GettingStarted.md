@@ -87,6 +87,8 @@ Connection profiles determine which settings are stored in the secure EEPROM and
 | `PROFILE_DPS_CERT` | Azure DPS (X.509) | WiFi, DPS Endpoint, Scope ID, Registration ID, Device Cert |
 | `PROFILE_CUSTOM` | Your own zone mapping | Defined in your `custom_profile.h` |
 
+> **Optional operational settings** — All MQTT and IoT Hub profiles (everything except `PROFILE_NONE` and `PROFILE_CUSTOM`) also support three optional settings stored in the SFlash config file (`/fs/device.cfg`) rather than EEPROM: `send_interval` (message send interval in seconds, default 30), `publish_topic` (MQTT publish topic), and `subscribe_topic` (MQTT subscribe topic). Configure them via the CLI commands `set_interval`, `set_pubtopic`, and `set_subtopic`, or through the Web UI.
+
 **Choosing a profile:**
 
 - For **generic MQTT brokers** (Mosquitto, HiveMQ, EMQX), start with `PROFILE_MQTT_USERPASS_TLS` or `PROFILE_MQTT_MTLS` depending on your authentication method.
@@ -209,11 +211,12 @@ void loop() {
     if (!mqttClient.connected()) {
         // Device ID extracted from client certificate CN
         mqttClient.connect(DeviceConfig_GetDeviceId());
+        mqttClient.subscribe(DeviceConfig_GetSubscribeTopic());
     }
 
-    mqttClient.publish("telemetry", "Hello from MXChip!");
+    mqttClient.publish(DeviceConfig_GetPublishTopic(), "Hello from MXChip!");
     mqttClient.loop();
-    delay(5000);
+    delay(DeviceConfig_GetSendInterval() * 1000);
 }
 ```
 
@@ -268,6 +271,12 @@ Commands vary based on the active connection profile.
 | `set_clientcert "<pem>"` | Set client certificate | MTLS/CERT profiles |
 | `set_clientkey "<pem>"` | Set client private key | MQTT_MTLS |
 | `set_devicecert "<pem>"` | Set device certificate | IOTHUB_CERT, DPS_CERT |
+| **Operational (config file)** | | |
+| `set_interval <seconds>` | Set message send interval (default: 30) | All MQTT/IoT Hub profiles |
+| `set_pubtopic <topic>` | Set MQTT publish topic | All MQTT/IoT Hub profiles |
+| `set_subtopic <topic>` | Set MQTT subscribe topic | All MQTT/IoT Hub profiles |
+
+> **Storage note:** WiFi credentials, certificates, and authentication settings are stored in the tamper-resistant STSAFE EEPROM. Operational settings (`send_interval`, `publish_topic`, `subscribe_topic`) are stored in a plain-text key=value file at `/fs/device.cfg` on the onboard SFlash FAT filesystem.
 
 ### Entering Certificates and Keys via CLI
 
@@ -375,11 +384,17 @@ The DeviceConfig system is split into focused modules:
 cores/arduino/config/
 ├── DeviceConfig.h           # Public API and profile definitions
 ├── DeviceConfig.cpp         # Storage layer (EEPROM read/write)
-├── DeviceConfigZones.h      # Zone constants and mapping macros
+├── DeviceConfigFile.h/cpp   # Config-file storage for SFlash-backed settings
+├── DeviceConfigZones.h      # Zone constants, mapping macros (FILE_ZONE, ZONE, ZONE2, ZONE3)
 ├── DeviceConfigRuntime.cpp  # Runtime loading and getter functions
 ├── DeviceConfigCLI.h/cpp    # Serial CLI interface
+├── SystemFileSystem.h/cpp   # Framework-owned FAT mount at /fs/ (auto-provisioned)
 ├── SettingUI.h              # Shared UI metadata for CLI and Web
 └── SettingValidator.h       # Input validation functions
+
+cores/arduino/FileSystem/
+├── SFlashBlockDevice.h/cpp  # mbed BlockDevice implementation for onboard SPI flash
+└── fatfs_exfuns.h/c         # FatFS helper utilities
 ```
 
 ### Azure IoT Library
@@ -411,6 +426,18 @@ The STSAFE secure element provides multiple storage zones with fixed sizes:
 | 10 | 88 bytes | WiFi password |
 
 Large certificates (up to ~2.6KB) span multiple zones automatically. The zone mapping is data-driven, allowing different profiles to allocate zones differently based on which settings they need.
+
+### Config File Settings
+
+Three operational settings are stored outside EEPROM in a plain-text key=value file at `/fs/device.cfg` on the onboard SFlash FAT filesystem:
+
+| Setting | Key | Default | Description |
+|---------|-----|---------|-------------|
+| `SETTING_SEND_INTERVAL` | `send_interval` | `30` | Message send interval in seconds |
+| `SETTING_PUBLISH_TOPIC` | `publish_topic` | `""` | MQTT publish topic |
+| `SETTING_SUBSCRIBE_TOPIC` | `subscribe_topic` | `""` | MQTT subscribe topic |
+
+The framework mounts the SFlash filesystem automatically at boot via `SystemFileSystem_Mount()`. If the partition has not been formatted, it is formatted automatically on first use. Do **not** create a separate `FATFileSystem("fs")` instance in your sketch — the framework owns this mount point.
 
 ### Validation Layer
 

@@ -76,6 +76,7 @@ Platform support layer documentation from `system/`:
 | [Board Hardware](system/BoardHardware.md) | GPIO mapping, peripherals, clock, and Arduino connector |
 | [MiCO Framework](system/MiCO.md) | MiCO OS abstraction (RTOS, WiFi, sockets, drivers) |
 | [Utilities](system/Utilities.md) | Memory debug and diagnostic helpers |
+| [Software Stack Deep Dive](system/SoftwareStack.md) | End-to-end walkthrough of every layer from STM32 hardware through mbed OS, MiCO, TLS, and the Arduino core |
 
 ---
 

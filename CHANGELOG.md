@@ -19,6 +19,32 @@ Replace `v2.2.1` with any tag listed below.
 
 ---
 
+## [2.3.0] - 2026-02-23
+
+### Added
+- **Config-file backed settings** — New `DeviceConfigFile` module stores settings that don't fit in STSAFE EEPROM zones in a key=value text file at `/fs/device.cfg` on the SFlash FAT filesystem
+- **`SystemFileSystem`** — Framework-owned FAT filesystem mount at `/fs/`; mounted automatically before `DeviceConfig_LoadAll()` so file-backed settings are available from first boot; auto-formats the flash partition on first use
+- **Three new settings** available across MQTT and IoT Hub profiles:
+  - `SETTING_SEND_INTERVAL` — message send interval in seconds (default 30), CLI command `set_interval`, stored in config file
+  - `SETTING_PUBLISH_TOPIC` — MQTT publish topic, CLI command `set_pubtopic`, stored in config file
+  - `SETTING_SUBSCRIBE_TOPIC` — MQTT subscribe topic, CLI command `set_subtopic`, stored in config file
+- **`SETTING_DEVICE_PASSWORD`** added to `PROFILE_MQTT_USERPASS` and `PROFILE_MQTT_USERPASS_TLS` profiles with EEPROM zone backing
+- **New `DeviceConfig` accessor functions**: `DeviceConfig_GetSendInterval()`, `DeviceConfig_GetPublishTopic()`, `DeviceConfig_GetSubscribeTopic()`, `DeviceConfig_GetDevicePassword()`
+- **Complete DPS accessor functions**: `DeviceConfig_GetDpsEndpoint()`, `DeviceConfig_GetScopeId()`, `DeviceConfig_GetRegistrationId()`, `DeviceConfig_GetSymmetricKey()` — previously missing from the runtime layer
+- **`FILE_ZONE(s)` macro** in `DeviceConfigZones.h` — designates a setting as file-backed (uses `FILE_ZONE_MARKER = 0xFE` sentinel in `zones[0]`) with max-size constants for each file setting
+- **PR build verification** — GitHub Actions workflow (`.github/workflows/pr-build-verification.yml`) and `tests/build_check.cpp` sketch that validates the framework compiles cleanly on every pull request
+
+### Changed
+- **FileSystem library refactor** — `SFlashBlockDevice` implementation consolidated from `libraries/FileSystem/src/` into `cores/arduino/FileSystem/`; `fatfs_exfuns` also moved into the core; the framework core now owns the singleton FAT filesystem instance
+- **`SystemFileSystem.cpp`** trimmed to a thin wrapper — block device and FAT mount logic lives in the new `cores/arduino/FileSystem/SFlashBlockDevice.cpp`
+- **`AzureIoTHub.cpp`** connection string handling updated to use the new `DeviceConfig_GetDpsEndpoint()` / `DeviceConfig_GetScopeId()` / `DeviceConfig_GetRegistrationId()` / `DeviceConfig_GetSymmetricKey()` getters instead of parsing the connection string inline
+- `SettingUI.h` and `SettingValidator.h` updated with UI metadata and validation rules for the three new file-backed settings
+
+### Breaking Changes
+- Do **not** create a `FATFileSystem("fs")` instance in sketch code or via the FileSystem library — the framework now owns this mount point. Using the `SFlashBlockDevice` class from the FileSystem library for low-level block access is still supported.
+
+---
+
 ## [2.2.1] - 2026-02-21
 
 ### Changed
@@ -47,5 +73,6 @@ Replace `v2.2.1` with any tag listed below.
 - Board telemetry collector (defunct Microsoft telemetry service)
 - Original Paho MQTT library (did not support mTLS connections)
 
+[2.3.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.3.0
 [2.2.1]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.2.1
 [2.1.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.1.0

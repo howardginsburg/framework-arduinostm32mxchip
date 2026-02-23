@@ -2,11 +2,15 @@
 
 **Version:** 0.0.1 | **Author:** Microsoft | **Category:** Data Storage | **Architecture:** stm32f4
 
-FAT filesystem driver for the onboard SPI flash (SFlash). Provides a block device interface and filesystem info utilities.
+Low-level block device interface for the onboard SPI flash (SFlash). Provides raw read/write/erase access to the flash memory for advanced use cases.
+
+> **Framework-managed filesystem:** Since v2.3.0 the framework mounts a FAT filesystem at `/fs/` automatically at boot via `SystemFileSystem` (see `cores/arduino/config/SystemFileSystem.h`). The `SFlashBlockDevice` implementation now lives in `cores/arduino/FileSystem/` and is shared between the framework core and this library. For most sketches you do **not** need to use this library directly — `DeviceConfig` file-backed settings and the standard `File`/`FileSystem` mbed APIs work automatically once the framework starts.
 
 ---
 
 ## Quick Start
+
+Use this library when you need direct block-level access to the SFlash (e.g., for custom filesystem formats or low-level diagnostics). For normal file I/O, use the mbed `File` API on the framework-managed `/fs/` mount point instead.
 
 ```cpp
 #include <SFlashBlockDevice.h>
@@ -17,7 +21,7 @@ SFlashBlockDevice flash;
 void setup() {
     flash.init();
 
-    // Get filesystem info
+    // Get filesystem info (requires FAT filesystem to be mounted)
     filesystem_info info = fatfs_get_info();
     Serial.printf("Total: %d%c, Free: %d%c\n",
         info.total_space, info.unit,
