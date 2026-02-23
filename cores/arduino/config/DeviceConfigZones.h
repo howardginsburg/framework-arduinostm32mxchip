@@ -70,6 +70,28 @@ extern "C" {
 #define ZONE3(z1, s1, z2, s2, z3, s3) {{z1, z2, z3}, {s1, s2, s3}}
 
 // =============================================================================
+// File-Based Setting Storage
+// =============================================================================
+
+/**
+ * @brief Sentinel value in zones[0] indicating this setting is stored in the
+ *        config file (/fs/device.cfg) rather than in a STSAFE EEPROM zone.
+ */
+#define FILE_ZONE_MARKER 0xFE
+
+/**
+ * @brief File-based setting mapping.
+ *
+ * @param s  Maximum value length in bytes (stored in zoneSizes[0]).
+ */
+#define FILE_ZONE(s) {{FILE_ZONE_MARKER, 0xFF, 0xFF}, {(s), 0, 0}}
+
+// Maximum sizes for file-stored settings
+#define MAX_SEND_INTERVAL_SIZE   16   // Enough for any 32-bit integer as string
+#define MAX_PUBLISH_TOPIC_SIZE   256  // MQTT topic string
+#define MAX_SUBSCRIBE_TOPIC_SIZE 256  // MQTT topic string
+
+// =============================================================================
 // Combined Buffer Sizes (for runtime buffers)
 // =============================================================================
 
@@ -84,6 +106,21 @@ extern "C" {
 
 /** Maximum client key size */
 #define MAX_CLIENT_KEY_SIZE ZONE_8_SIZE
+
+/** Maximum connection string size (IoT Hub SAS / Cert — zone 5) */
+#define MAX_CONNECTION_STRING_SIZE ZONE_5_SIZE
+
+/** Maximum DPS endpoint size (zone 5 or zone 2 depending on profile) */
+#define MAX_DPS_ENDPOINT_SIZE ZONE_5_SIZE
+
+/** Maximum scope ID size (zone 5 or zone 2 depending on profile) */
+#define MAX_SCOPE_ID_SIZE ZONE_5_SIZE
+
+/** Maximum registration ID size (zone 6) */
+#define MAX_REGISTRATION_ID_SIZE ZONE_6_SIZE
+
+/** Maximum symmetric key size (zone 7) */
+#define MAX_SYMMETRIC_KEY_SIZE ZONE_7_SIZE
 
 #ifdef __cplusplus
 }

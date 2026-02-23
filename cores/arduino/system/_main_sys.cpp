@@ -13,6 +13,7 @@
 #include "SystemWiFi.h"
 #define _DEVICE_CONFIG_IMPL
 #include "config/DeviceConfig.h"
+#include "config/SystemFileSystem.h"
 
 // Weak stub — does nothing when the Sensor library is not linked.
 // SensorManager.cpp overrides this with the real initialisation.
@@ -158,6 +159,10 @@ int main(void)
     // Initialize device configuration system with the profile selected at compile time
     DeviceConfig_Init(CONNECTION_PROFILE);
     
+    // Mount the SFlash filesystem so that file-backed DeviceConfig settings
+    // (e.g. SETTING_PUBLISH_TOPIC) can be read and written via CLI or at runtime.
+    SystemFileSystem_Mount();
+
     // Load all configuration values from EEPROM into internal buffers
     DeviceConfig_LoadAll();
 

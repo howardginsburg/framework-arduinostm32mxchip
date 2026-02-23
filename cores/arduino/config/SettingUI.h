@@ -16,7 +16,8 @@ extern "C" {
  */
 typedef enum {
     UI_FIELD_TEXT,        // Single-line text input
-    UI_FIELD_TEXTAREA     // Multi-line text (for certificates/keys)
+    UI_FIELD_TEXTAREA,    // Multi-line text (for certificates/keys)
+    UI_FIELD_NUMBER       // Numeric (integer) input
 } UIFieldType;
 
 /**
@@ -65,6 +66,11 @@ static const SettingUIMetadata SETTING_UI[] = {
     {SETTING_CLIENT_CERT,      "Client Certificate",     "set_clientcert",  "ClientCert",       "Client Certificate (PEM)",                   NULL, UI_FIELD_TEXTAREA},
     {SETTING_CLIENT_KEY,       "Client Private Key",     "set_clientkey",   "ClientKey",        "Client Private Key (PEM)",                   NULL, UI_FIELD_TEXTAREA},
     {SETTING_DEVICE_CERT,      "Device Certificate",     "set_devicecert",  "DeviceCert",       "Device X.509 Certificate (PEM)",             NULL, UI_FIELD_TEXTAREA},
+
+    // Operational settings (stored in config file for unlimited expansion)
+    {SETTING_SEND_INTERVAL,    "Send Interval (sec)",    "set_sendinterval","SendInterval",     "Message send interval (seconds)",            "30", UI_FIELD_NUMBER},
+    {SETTING_PUBLISH_TOPIC,    "Publish Topic",          "set_pubtopic",    "PublishTopic",     "MQTT publish topic",                         NULL, UI_FIELD_TEXT},
+    {SETTING_SUBSCRIBE_TOPIC,  "Subscribe Topic",        "set_subtopic",    "SubscribeTopic",   "MQTT subscribe topic",                       NULL, UI_FIELD_TEXT},
 };
 
 #define SETTING_UI_COUNT (sizeof(SETTING_UI) / sizeof(SettingUIMetadata))
@@ -151,6 +157,20 @@ static inline const SettingUIMetadata* SettingUI_FindByFormName(const char* name
 static inline bool SettingUI_IsMultiLine(const SettingUIMetadata* meta)
 {
     return meta != NULL && meta->fieldType == UI_FIELD_TEXTAREA;
+}
+
+/**
+ * @brief Get the data type of a setting based on its UI field type
+ *
+ * @return SETTING_TYPE_INT for numeric fields, SETTING_TYPE_STRING otherwise
+ */
+static inline SettingDataType SettingUI_GetDataType(const SettingUIMetadata* meta)
+{
+    if (meta != NULL && meta->fieldType == UI_FIELD_NUMBER)
+    {
+        return SETTING_TYPE_INT;
+    }
+    return SETTING_TYPE_STRING;
 }
 
 #ifdef __cplusplus

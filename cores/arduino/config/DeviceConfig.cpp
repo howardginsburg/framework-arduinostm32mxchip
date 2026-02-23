@@ -12,6 +12,7 @@
 #define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
+#include "DeviceConfigFile.h"
 #include "SettingUI.h"
 #include "EEPROMInterface.h"
 #include <string.h>
@@ -53,7 +54,10 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SCOPE_ID
             UNUSED_ZONE,            // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -63,20 +67,23 @@ static const ProfileDefinition PROFILES[] = {
         "MQTT Username/Password",
         "MQTT broker with username and password authentication",
         {
-            ZONE(3, ZONE_3_SIZE),   // SETTING_WIFI_SSID
-            ZONE(10, ZONE_10_SIZE), // SETTING_WIFI_PASSWORD
-            ZONE(5, ZONE_5_SIZE),   // SETTING_BROKER_URL
-            ZONE(6, ZONE_6_SIZE),   // SETTING_DEVICE_ID
-            ZONE(7, ZONE_7_SIZE),   // SETTING_DEVICE_PASSWORD
-            UNUSED_ZONE,            // SETTING_CA_CERT
-            UNUSED_ZONE,            // SETTING_CLIENT_CERT
-            UNUSED_ZONE,            // SETTING_CLIENT_KEY
-            UNUSED_ZONE,            // SETTING_CONNECTION_STRING
-            UNUSED_ZONE,            // SETTING_DPS_ENDPOINT
-            UNUSED_ZONE,            // SETTING_SCOPE_ID
-            UNUSED_ZONE,            // SETTING_REGISTRATION_ID
-            UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            ZONE(3, ZONE_3_SIZE),           // SETTING_WIFI_SSID
+            ZONE(10, ZONE_10_SIZE),         // SETTING_WIFI_PASSWORD
+            ZONE(5, ZONE_5_SIZE),           // SETTING_BROKER_URL
+            ZONE(6, ZONE_6_SIZE),           // SETTING_DEVICE_ID
+            ZONE(7, ZONE_7_SIZE),           // SETTING_DEVICE_PASSWORD
+            UNUSED_ZONE,                    // SETTING_CA_CERT
+            UNUSED_ZONE,                    // SETTING_CLIENT_CERT
+            UNUSED_ZONE,                    // SETTING_CLIENT_KEY
+            UNUSED_ZONE,                    // SETTING_CONNECTION_STRING
+            UNUSED_ZONE,                    // SETTING_DPS_ENDPOINT
+            UNUSED_ZONE,                    // SETTING_SCOPE_ID
+            UNUSED_ZONE,                    // SETTING_REGISTRATION_ID
+            UNUSED_ZONE,                    // SETTING_SYMMETRIC_KEY
+            UNUSED_ZONE,                    // SETTING_DEVICE_CERT
+            FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
+            FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),   // SETTING_PUBLISH_TOPIC
+            FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)  // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -100,7 +107,10 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SCOPE_ID
             UNUSED_ZONE,            // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
+            FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),   // SETTING_PUBLISH_TOPIC
+            FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)  // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -125,7 +135,10 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SCOPE_ID
             UNUSED_ZONE,            // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
+            FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),   // SETTING_PUBLISH_TOPIC
+            FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)  // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -148,7 +161,10 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_SCOPE_ID
             UNUSED_ZONE,            // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -172,7 +188,10 @@ static const ProfileDefinition PROFILES[] = {
             UNUSED_ZONE,            // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
             // DEVICE_CERT spans zones 0+7+8 = 2640 bytes total
-            ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE)  // SETTING_DEVICE_CERT
+            ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE),  // SETTING_DEVICE_CERT
+            FILE_ZONE(MAX_SEND_INTERVAL_SIZE),   // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -195,7 +214,10 @@ static const ProfileDefinition PROFILES[] = {
             ZONE(2, ZONE_2_SIZE),   // SETTING_SCOPE_ID
             ZONE(6, ZONE_6_SIZE),   // SETTING_REGISTRATION_ID
             ZONE(7, ZONE_7_SIZE),   // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -219,7 +241,10 @@ static const ProfileDefinition PROFILES[] = {
             ZONE(6, ZONE_6_SIZE),   // SETTING_REGISTRATION_ID
             UNUSED_ZONE,            // SETTING_SYMMETRIC_KEY
             // DEVICE_CERT spans zones 0+7+8 = 2640 bytes total
-            ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE)  // SETTING_DEVICE_CERT
+            ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE),  // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     },
     
@@ -242,7 +267,10 @@ static const ProfileDefinition PROFILES[] = {
             ZONE(2, ZONE_2_SIZE),   // SETTING_SCOPE_ID
             ZONE(6, ZONE_6_SIZE),   // SETTING_REGISTRATION_ID
             ZONE(7, ZONE_7_SIZE),   // SETTING_SYMMETRIC_KEY
-            UNUSED_ZONE             // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_DEVICE_CERT
+            UNUSED_ZONE,            // SETTING_SEND_INTERVAL
+            UNUSED_ZONE,            // SETTING_PUBLISH_TOPIC
+            UNUSED_ZONE             // SETTING_SUBSCRIBE_TOPIC
         }
     }
 };
@@ -307,8 +335,15 @@ int DeviceConfig_Save(SettingID setting, const char* value)
         return -1;
     }
     
-    EEPROMInterface eeprom;
     const ZoneMapping* mapping = &s_activeProfile->mappings[setting];
+    
+    // Route file-backed settings to the config file
+    if (mapping->zones[0] == FILE_ZONE_MARKER)
+    {
+        return ConfigFile_Save(setting, value);
+    }
+    
+    EEPROMInterface eeprom;
     int len = strlen(value) + 1;  // Include null terminator
     int maxLen = DeviceConfig_GetMaxLen(setting);
     
@@ -345,8 +380,15 @@ int DeviceConfig_Read(SettingID setting, char* buffer, int bufferSize)
         return -1;
     }
     
-    EEPROMInterface eeprom;
     const ZoneMapping* mapping = &s_activeProfile->mappings[setting];
+    
+    // Route file-backed settings to the config file
+    if (mapping->zones[0] == FILE_ZONE_MARKER)
+    {
+        return ConfigFile_Read(setting, buffer, bufferSize);
+    }
+    
+    EEPROMInterface eeprom;
     
     // Read data from all configured zones
     int totalRead = 0;
