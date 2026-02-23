@@ -31,6 +31,10 @@ static char s_caCert[MAX_CA_CERT_SIZE];
 static char s_clientCert[MAX_CLIENT_CERT_SIZE];
 static char s_clientKey[MAX_CLIENT_KEY_SIZE];
 static char s_connectionString[ZONE_5_SIZE];
+static char s_dpsEndpoint[MAX_DPS_ENDPOINT_SIZE];
+static char s_scopeId[MAX_SCOPE_ID_SIZE];
+static char s_registrationId[MAX_REGISTRATION_ID_SIZE];
+static char s_symmetricKey[MAX_SYMMETRIC_KEY_SIZE];
 static char s_deviceId[256];
 static int  s_sendInterval = 30;
 static char s_publishTopic[MAX_PUBLISH_TOPIC_SIZE];
@@ -336,6 +340,41 @@ bool DeviceConfig_LoadAll(void)
         DeviceConfig_Read(SETTING_DEVICE_ID, s_deviceId, sizeof(s_deviceId));
     }
     
+    // Load DPS-specific settings
+    s_dpsEndpoint[0] = '\0';
+    s_scopeId[0] = '\0';
+    s_registrationId[0] = '\0';
+    s_symmetricKey[0] = '\0';
+
+    if (DeviceConfig_IsSettingAvailable(SETTING_DPS_ENDPOINT))
+    {
+        if (DeviceConfig_Read(SETTING_DPS_ENDPOINT, s_dpsEndpoint, sizeof(s_dpsEndpoint)) < 0)
+        {
+            s_dpsEndpoint[0] = '\0';
+        }
+    }
+    if (DeviceConfig_IsSettingAvailable(SETTING_SCOPE_ID))
+    {
+        if (DeviceConfig_Read(SETTING_SCOPE_ID, s_scopeId, sizeof(s_scopeId)) < 0)
+        {
+            s_scopeId[0] = '\0';
+        }
+    }
+    if (DeviceConfig_IsSettingAvailable(SETTING_REGISTRATION_ID))
+    {
+        if (DeviceConfig_Read(SETTING_REGISTRATION_ID, s_registrationId, sizeof(s_registrationId)) < 0)
+        {
+            s_registrationId[0] = '\0';
+        }
+    }
+    if (DeviceConfig_IsSettingAvailable(SETTING_SYMMETRIC_KEY))
+    {
+        if (DeviceConfig_Read(SETTING_SYMMETRIC_KEY, s_symmetricKey, sizeof(s_symmetricKey)) < 0)
+        {
+            s_symmetricKey[0] = '\0';
+        }
+    }
+
     // Load operational settings from config file (MQTT and IoTHub profiles)
     s_sendInterval = 30;  // Default
     s_publishTopic[0] = '\0';
@@ -431,4 +470,29 @@ const char* DeviceConfig_GetPublishTopic(void)
 const char* DeviceConfig_GetSubscribeTopic(void)
 {
     return s_subscribeTopic;
+}
+
+const char* DeviceConfig_GetConnectionString(void)
+{
+    return s_connectionString;
+}
+
+const char* DeviceConfig_GetDpsEndpoint(void)
+{
+    return s_dpsEndpoint;
+}
+
+const char* DeviceConfig_GetScopeId(void)
+{
+    return s_scopeId;
+}
+
+const char* DeviceConfig_GetRegistrationId(void)
+{
+    return s_registrationId;
+}
+
+const char* DeviceConfig_GetSymmetricKey(void)
+{
+    return s_symmetricKey;
 }

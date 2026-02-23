@@ -267,6 +267,36 @@ const char* DeviceConfig_GetPublishTopic(void);
  */
 const char* DeviceConfig_GetSubscribeTopic(void);
 
+/**
+ * @brief Get IoT Hub connection string (IoT Hub SAS/Cert profiles)
+ * @return Pointer to connection string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetConnectionString(void);
+
+/**
+ * @brief Get DPS endpoint URL (DPS profiles)
+ * @return Pointer to DPS endpoint string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetDpsEndpoint(void);
+
+/**
+ * @brief Get DPS scope ID (DPS profiles)
+ * @return Pointer to scope ID string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetScopeId(void);
+
+/**
+ * @brief Get DPS registration ID (DPS SAS profiles)
+ * @return Pointer to registration ID string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetRegistrationId(void);
+
+/**
+ * @brief Get DPS symmetric key (DPS SAS profiles)
+ * @return Pointer to symmetric key string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetSymmetricKey(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -67,19 +67,15 @@ static TwinReceivedCallback twinReceivedCallback = NULL;
 // Load and parse connection string from EEPROM
 static bool loadConnectionString()
 {
-    if (!DeviceConfig_IsSettingAvailable(SETTING_CONNECTION_STRING))
+    const char* cs = DeviceConfig_GetConnectionString();
+    if (cs == NULL || cs[0] == '\0')
     {
-        Serial.println("[AzureIoT] Error: Connection string setting not available!");
-        return false;
-    }
-
-    int bytesRead = DeviceConfig_Read(SETTING_CONNECTION_STRING, connectionString, sizeof(connectionString));
-    if (bytesRead < 0 || connectionString[0] == '\0')
-    {
-        Serial.println("[AzureIoT] Error: Failed to read connection string from EEPROM!");
+        Serial.println("[AzureIoT] Error: Connection string not configured!");
         Serial.println("[AzureIoT] Use: set_az_iothub <connection_string>");
         return false;
     }
+    strncpy(connectionString, cs, sizeof(connectionString) - 1);
+    connectionString[sizeof(connectionString) - 1] = '\0';
     Serial.print("[AzureIoT] Connection string loaded (");
     Serial.print(strlen(connectionString));
     Serial.println(" bytes)");
@@ -156,44 +152,35 @@ static bool loadConnectionString()
 // Load DPS settings from EEPROM
 static bool loadDPSSettings()
 {
-    if (!DeviceConfig_IsSettingAvailable(SETTING_DPS_ENDPOINT))
-    {
-        Serial.println("[DPS] Error: DPS endpoint not available!");
-        return false;
-    }
-    DeviceConfig_Read(SETTING_DPS_ENDPOINT, dpsEndpoint, sizeof(dpsEndpoint));
-    if (dpsEndpoint[0] == '\0')
+    const char* ep = DeviceConfig_GetDpsEndpoint();
+    if (ep == NULL || ep[0] == '\0')
     {
         Serial.println("[DPS] Error: DPS endpoint not configured!");
         Serial.println("[DPS] Use: set_dps_endpoint global.azure-devices-provisioning.net");
         return false;
     }
+    strncpy(dpsEndpoint, ep, sizeof(dpsEndpoint) - 1);
+    dpsEndpoint[sizeof(dpsEndpoint) - 1] = '\0';
 
-    if (!DeviceConfig_IsSettingAvailable(SETTING_SCOPE_ID))
-    {
-        Serial.println("[DPS] Error: Scope ID not available!");
-        return false;
-    }
-    DeviceConfig_Read(SETTING_SCOPE_ID, scopeId, sizeof(scopeId));
-    if (scopeId[0] == '\0')
+    const char* sid = DeviceConfig_GetScopeId();
+    if (sid == NULL || sid[0] == '\0')
     {
         Serial.println("[DPS] Error: Scope ID not configured!");
         Serial.println("[DPS] Use: set_scopeid <scope_id>");
         return false;
     }
+    strncpy(scopeId, sid, sizeof(scopeId) - 1);
+    scopeId[sizeof(scopeId) - 1] = '\0';
 
-    if (!DeviceConfig_IsSettingAvailable(SETTING_REGISTRATION_ID))
-    {
-        Serial.println("[DPS] Error: Registration ID not available!");
-        return false;
-    }
-    DeviceConfig_Read(SETTING_REGISTRATION_ID, registrationId, sizeof(registrationId));
-    if (registrationId[0] == '\0')
+    const char* rid = DeviceConfig_GetRegistrationId();
+    if (rid == NULL || rid[0] == '\0')
     {
         Serial.println("[DPS] Error: Registration ID not configured!");
         Serial.println("[DPS] Use: set_regid <registration_id>");
         return false;
     }
+    strncpy(registrationId, rid, sizeof(registrationId) - 1);
+    registrationId[sizeof(registrationId) - 1] = '\0';
 
     Serial.print("[DPS] Endpoint: ");
     Serial.println(dpsEndpoint);
@@ -401,18 +388,15 @@ bool azureIoTInit()
     if (!loadDPSSettings()) return false;
 
     // Read symmetric key
-    if (!DeviceConfig_IsSettingAvailable(SETTING_SYMMETRIC_KEY))
-    {
-        Serial.println("[DPS] Error: Symmetric key not available!");
-        return false;
-    }
-    DeviceConfig_Read(SETTING_SYMMETRIC_KEY, symmetricKey, sizeof(symmetricKey));
-    if (symmetricKey[0] == '\0')
+    const char* sk = DeviceConfig_GetSymmetricKey();
+    if (sk == NULL || sk[0] == '\0')
     {
         Serial.println("[DPS] Error: Symmetric key not configured!");
         Serial.println("[DPS] Use: set_symkey <key>");
         return false;
     }
+    strncpy(symmetricKey, sk, sizeof(symmetricKey) - 1);
+    symmetricKey[sizeof(symmetricKey) - 1] = '\0';
 
     // Derive device key from group master key if needed
 #if CONNECTION_PROFILE == PROFILE_DPS_SAS_GROUP
