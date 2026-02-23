@@ -31,6 +31,9 @@ static char s_clientCert[MAX_CLIENT_CERT_SIZE];
 static char s_clientKey[MAX_CLIENT_KEY_SIZE];
 static char s_connectionString[ZONE_5_SIZE];
 static char s_deviceId[256];
+static int  s_sendInterval = 30;
+static char s_publishTopic[MAX_PUBLISH_TOPIC_SIZE];
+static char s_subscribeTopic[MAX_SUBSCRIBE_TOPIC_SIZE];
 
 // =============================================================================
 // URL/String Parsing Functions
@@ -321,6 +324,36 @@ bool DeviceConfig_LoadAll(void)
         DeviceConfig_Read(SETTING_DEVICE_ID, s_deviceId, sizeof(s_deviceId));
     }
     
+    // Load operational settings from config file (MQTT and IoTHub profiles)
+    s_sendInterval = 30;  // Default
+    s_publishTopic[0] = '\0';
+    s_subscribeTopic[0] = '\0';
+    
+    if (DeviceConfig_IsSettingAvailable(SETTING_SEND_INTERVAL))
+    {
+        char intervalStr[MAX_SEND_INTERVAL_SIZE];
+        if (DeviceConfig_Read(SETTING_SEND_INTERVAL, intervalStr, sizeof(intervalStr)) > 0 &&
+            intervalStr[0] != '\0')
+        {
+            char* end = NULL;
+            long val = strtol(intervalStr, &end, 10);
+            if (end != intervalStr && *end == '\0' && val > 0)
+            {
+                s_sendInterval = (int)val;
+            }
+        }
+    }
+    
+    if (DeviceConfig_IsSettingAvailable(SETTING_PUBLISH_TOPIC))
+    {
+        DeviceConfig_Read(SETTING_PUBLISH_TOPIC, s_publishTopic, sizeof(s_publishTopic));
+    }
+    
+    if (DeviceConfig_IsSettingAvailable(SETTING_SUBSCRIBE_TOPIC))
+    {
+        DeviceConfig_Read(SETTING_SUBSCRIBE_TOPIC, s_subscribeTopic, sizeof(s_subscribeTopic));
+    }
+    
     return success;
 }
 
@@ -366,4 +399,19 @@ const char* DeviceConfig_GetClientKey(void)
 const char* DeviceConfig_GetDeviceId(void)
 {
     return s_deviceId;
+}
+
+int DeviceConfig_GetSendInterval(void)
+{
+    return s_sendInterval;
+}
+
+const char* DeviceConfig_GetPublishTopic(void)
+{
+    return s_publishTopic;
+}
+
+const char* DeviceConfig_GetSubscribeTopic(void)
+{
+    return s_subscribeTopic;
 }

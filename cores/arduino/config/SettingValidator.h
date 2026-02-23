@@ -300,6 +300,50 @@ static inline ValidationResult Validator_DpsScopeId(const char* scopeId)
 }
 
 /**
+ * @brief Validate a numeric (integer) string
+ *
+ * Accepts an optional leading '-' followed by one or more decimal digits.
+ *
+ * @param value String representation of an integer
+ * @return ValidationResult
+ */
+static inline ValidationResult Validator_Numeric(const char* value)
+{
+    if (value == NULL)
+    {
+        return VALIDATE_ERROR_NULL;
+    }
+
+    int len = strlen(value);
+    if (len == 0)
+    {
+        return VALIDATE_ERROR_EMPTY;
+    }
+
+    const char* p = value;
+    if (*p == '-')
+    {
+        p++;  // Allow negative integers
+    }
+
+    if (*p == '\0')
+    {
+        return VALIDATE_ERROR_INVALID_FORMAT;  // Just a bare '-'
+    }
+
+    while (*p != '\0')
+    {
+        if (!isdigit((unsigned char)*p))
+        {
+            return VALIDATE_ERROR_INVALID_FORMAT;
+        }
+        p++;
+    }
+
+    return VALIDATE_OK;
+}
+
+/**
  * @brief Validate a setting value based on its type
  * 
  * @param setting Setting ID
@@ -343,6 +387,13 @@ static inline ValidationResult Validator_ValidateSetting(SettingID setting, cons
         case SETTING_DPS_ENDPOINT:
         case SETTING_REGISTRATION_ID:
         case SETTING_SYMMETRIC_KEY:
+        case SETTING_PUBLISH_TOPIC:
+        case SETTING_SUBSCRIBE_TOPIC:
+            return VALIDATE_OK;
+            
+        case SETTING_SEND_INTERVAL:
+            return Validator_Numeric(value);
+            
         default:
             return VALIDATE_OK;
     }

@@ -68,8 +68,22 @@ typedef enum {
     SETTING_REGISTRATION_ID,        // DPS registration ID
     SETTING_SYMMETRIC_KEY,          // DPS symmetric key
     SETTING_DEVICE_CERT,            // Large device certificate spanning multiple zones
+    SETTING_SEND_INTERVAL,          // Message send interval in seconds (numeric, config file)
+    SETTING_PUBLISH_TOPIC,          // MQTT publish topic (config file)
+    SETTING_SUBSCRIBE_TOPIC,        // MQTT subscribe topic (config file)
     SETTING_COUNT                   // Sentinel value - number of settings
 } SettingID;
+
+/**
+ * @brief Data type of a configuration setting
+ *
+ * Used by the UI layer and validator to distinguish numeric settings
+ * from plain string settings.
+ */
+typedef enum {
+    SETTING_TYPE_STRING = 0,        // String value (default)
+    SETTING_TYPE_INT                // Integer value
+} SettingDataType;
 
 /**
  * @brief Maximum number of zones a setting can span
@@ -227,6 +241,24 @@ const char* DeviceConfig_GetClientKey(void);
  * @return Pointer to device ID string (valid after DeviceConfig_LoadAll)
  */
 const char* DeviceConfig_GetDeviceId(void);
+
+/**
+ * @brief Get message send interval in seconds
+ * @return Send interval in seconds, or 30 if not set (valid after DeviceConfig_LoadAll)
+ */
+int DeviceConfig_GetSendInterval(void);
+
+/**
+ * @brief Get MQTT publish topic
+ * @return Pointer to publish topic string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetPublishTopic(void);
+
+/**
+ * @brief Get MQTT subscribe topic
+ * @return Pointer to subscribe topic string (valid after DeviceConfig_LoadAll)
+ */
+const char* DeviceConfig_GetSubscribeTopic(void);
 
 #ifdef __cplusplus
 }
