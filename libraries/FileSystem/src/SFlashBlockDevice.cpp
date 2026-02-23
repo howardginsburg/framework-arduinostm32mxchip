@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. 
+// Licensed under the MIT license.
 
-#include "SFlashBlockDevice.h"
+// SFlashBlockDevice is implemented in the framework core.
+// See cores/arduino/SFlashBlockDevice.[h/cpp]
+// This file is intentionally empty to prevent duplicate symbol definitions.
 
 #define BLOCK_SIZE                8
 #define SECTOR_SIZE               512
