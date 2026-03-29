@@ -1,8 +1,12 @@
 # TLS Socket
 
-Secure TLS socket using mbedTLS. Supports server-only (one-way) and mutual TLS (mTLS) authentication.
+Secure TLS socket using wolfSSL (replaces mbedTLS). Supports server-only
+(one-way) and mutual TLS (mTLS) authentication with TLS 1.2 and TLS 1.3.
 
 > **Source:** [cores/arduino/TLSSocket.h](../../cores/arduino/TLSSocket.h)
+
+> **TLS library:** wolfSSL — see [system/wolfssl/README.md](../../system/wolfssl/README.md)
+> for upgrade instructions.
 
 ---
 
@@ -60,7 +64,20 @@ delete tlsSocket;
 
 ---
 
+## Migration from mbedTLS
+
+No changes are required in user sketches.  The `TLSSocket` public API is
+identical to the previous mbedTLS-backed version.
+
+The underlying TLS library changed from mbedTLS to wolfSSL.  The pre-compiled
+system binaries (`libdevkit-sdk-core-lib.a`, `libstsafe.a`) continue to use
+mbedTLS internally, which is satisfied by the mbedTLS headers still present
+in `system/mbed-os/features/mbedtls/`.  Your sketch code calls only wolfSSL.
+
+---
+
 ## See Also
 
 - [HTTP Client](HTTPClient.md) — Higher-level HTTPS client
 - [EEPROM](EEPROM.md) — Storing CA certificates and client keys
+- [wolfSSL integration](../../system/wolfssl/README.md) — Upgrading to real wolfSSL sources
