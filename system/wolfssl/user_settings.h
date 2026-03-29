@@ -44,6 +44,7 @@
 #define HAVE_SUPPORTED_CURVES    /* Supported-curves TLS extension            */
 #define HAVE_FFDHE_2048          /* Finite-field DHE group (fallback)         */
 #define FP_MAX_BITS 4096         /* Max RSA key size we can verify            */
+#define WC_RSA_PSS              /* RSA-PSS signatures — required by TLS 1.3  */
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Symmetric / hash / MAC                                                    */
