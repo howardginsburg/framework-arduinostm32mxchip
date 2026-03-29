@@ -17,6 +17,7 @@
 #ifndef WOLFSSL_USER_SETTINGS
 #  define WOLFSSL_USER_SETTINGS
 #endif
+#include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/ssl.h"
 
 // IoT Hub SDK-style configuration

@@ -1,8 +1,9 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license.
-// Modified to use wolfSSL for TLS (replaces mbedTLS in open-source code path).
+// wolfSSL 5.7.6 backed TLS — replaces mbedTLS in open-source code path.
 
 #include "TLSSocket.h"
+#include <wolfssl/error-ssl.h>
 #include <stdlib.h>
 #include <string.h>
 

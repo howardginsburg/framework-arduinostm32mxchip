@@ -14,6 +14,7 @@
 #ifndef WOLFSSL_USER_SETTINGS
 #  define WOLFSSL_USER_SETTINGS
 #endif
+#include "wolfssl/wolfcrypt/settings.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/coding.h"
 

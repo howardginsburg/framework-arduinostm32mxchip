@@ -1,100 +1,92 @@
-# system/wolfssl — wolfSSL integration directory
+# system/wolfssl — wolfSSL 5.7.6 integration
 
-This directory contains the build configuration and stub headers for the
-wolfSSL TLS library used by `TLSSocket` and `AzureIoTCrypto`.
+This directory contains the build configuration and **real wolfSSL headers**
+for the wolfSSL TLS library used by `TLSSocket` and `AzureIoTCrypto`.
 
-## Current state: stubs
+## Version
 
-The `include/wolfssl/` tree contains **minimal stub headers** that define
-only the types and function signatures needed to compile and link the
-framework.  The actual implementations live in
-`cores/arduino/wolfssl/wolfssl_tls_stub.c` and
-`cores/arduino/wolfssl/wolfcrypt_stub.c`.
+**wolfSSL 5.7.6** (GPLv2+) — vendored from https://github.com/wolfSSL/wolfssl
 
-These stubs are sufficient for the CI build verification and for
-`AzureIoTCrypto` (HMAC-SHA256 / Base64) which is implemented in pure C
-inside the stub.  The TLS handshake stub in `wolfssl_tls_stub.c` does **not**
-perform real TLS — it passes data through unencrypted.
-
-## Upgrading to real wolfSSL
-
-To replace the stubs with the genuine wolfSSL library:
-
-### 1. Download wolfSSL 5.x
-
-```bash
-git clone https://github.com/wolfSSL/wolfssl.git --depth 1 --branch v5.7.0-stable
-```
-
-Or download a release archive from https://www.wolfssl.com/download/
-
-### 2. Configure wolfSSL for a minimal embedded client build
-
-```bash
-cd wolfssl
-./autogen.sh
-./configure \
-  --enable-tls13 \
-  --enable-ecc \
-  --enable-hkdf \
-  --enable-sni \
-  --enable-base64encode \
-  --disable-examples \
-  --disable-filesystem \
-  --disable-oldtls
-```
-
-For bare-metal builds, use `WOLFSSL_USER_SETTINGS` and
-`system/wolfssl/user_settings.h` instead of `./configure`.
-
-### 3. Copy sources into the framework
+## Directory layout
 
 ```
-system/wolfssl/wolfssl-5.x/
-├── wolfssl/          (header tree)
-│   ├── ssl.h
-│   ├── wolfcrypt/
-│   │   ├── hmac.h
-│   │   ├── coding.h
-│   │   └── ...
+system/wolfssl/
+├── user_settings.h              # Build configuration (WOLFSSL_USER_SETTINGS)
+├── README.md                    # This file
+└── include/
+    └── wolfssl/                 # Real wolfSSL 5.7.6 header tree
+        ├── ssl.h
+        ├── internal.h
+        ├── error-ssl.h
+        ├── wolfio.h
+        └── wolfcrypt/
+            ├── settings.h
+            ├── types.h
+            ├── hmac.h
+            ├── coding.h
+            ├── aes.h
+            ├── ecc.h
+            ├── sha256.h
+            └── ... (all wolfcrypt headers)
+
+cores/arduino/wolfssl/
+├── src/                         # wolfSSL TLS layer (.c source files)
+│   ├── ssl.c
+│   ├── tls.c
+│   ├── tls13.c
+│   ├── internal.c
 │   └── ...
-└── src/              (wolfSSL .c sources compiled by platform.txt)
-    ├── ssl.c
-    ├── tls.c
-    ├── tls13.c
-    ├── wolfcrypt/src/hmac.c
-    ├── wolfcrypt/src/sha256.c
-    ├── wolfcrypt/src/coding.c
-    └── ...
+└── wolfcrypt/
+    └── src/                     # wolfCrypt primitives (.c source files)
+        ├── aes.c
+        ├── asn.c
+        ├── ecc.c
+        ├── hmac.c
+        ├── sha256.c
+        ├── coding.c
+        └── ...
 ```
 
-Update `platform.txt` to compile sources from `{build.system.path}/wolfssl/wolfssl-5.x/src/`
-and add `{build.system.path}/wolfssl/wolfssl-5.x/` to the include path.
+## How it works
 
-### 4. Remove the stubs
+- `user_settings.h` is activated by `-DWOLFSSL_USER_SETTINGS` in `platform.txt`
+- Headers live in `system/wolfssl/include/` (on the compiler's `-I` path)
+- Source files live in `cores/arduino/wolfssl/` and are auto-compiled by the
+  Arduino/PlatformIO build system
+- `cores/arduino/wolfssl/` is also on the `-I` path so wolfSSL's internal
+  `#include <wolfcrypt/src/misc.c>` resolves correctly
 
-Delete the following stub files once real wolfSSL is in place:
+## Build configuration
 
-```
-cores/arduino/wolfssl/wolfssl_tls_stub.c
-cores/arduino/wolfssl/wolfcrypt_stub.c
-system/wolfssl/include/wolfssl/ssl.h
-system/wolfssl/include/wolfssl/wolfcrypt/hmac.h
-system/wolfssl/include/wolfssl/wolfcrypt/coding.h
-system/wolfssl/include/wolfssl/wolfcrypt/types.h
-```
+See `user_settings.h` for the full list of enabled features. Key points:
 
-`system/wolfssl/user_settings.h` should be **kept** — wolfSSL reads it when
-`WOLFSSL_USER_SETTINGS` is defined (set in `platform.txt`).
+- **TLS 1.2 + TLS 1.3** client (no server)
+- **ECDHE + RSA** key exchange / server authentication
+- **AES-GCM**, **ChaCha20-Poly1305** cipher suites
+- **HMAC-SHA256** (for Azure IoT SAS tokens)
+- **Base64** encode/decode (for key/signature encoding)
+- **SP math** with Cortex-M assembly optimisations
+- Aggressive flash reduction: small tables, no error strings, no unused algorithms
 
 ## Why wolfSSL?
 
 The pre-compiled system binaries (`libdevkit-sdk-core-lib.a`, `libstsafe.a`)
 use mbedTLS internally — those symbols are still satisfied by the mbedTLS
-headers in `system/mbed-os/features/mbedtls/`.  The framework's own
-open-source code (TLSSocket, AzureIoTCrypto) now uses wolfSSL exclusively,
-which:
+headers in `system/mbed-os/features/mbedtls/`. The framework's own open-source
+code (TLSSocket, AzureIoTCrypto) uses wolfSSL exclusively, providing:
 
-- provides TLS 1.3 support
-- carries no closed-source constraints on the user's code
-- can be audited / modified freely
+- TLS 1.3 support
+- No closed-source constraints on user code
+- Full auditability and modifiability
+- GPLv2+ licence (compatible with open-source projects)
+
+## Updating wolfSSL
+
+To update to a newer wolfSSL release:
+
+1. Clone the new tag: `git clone --depth 1 --branch v5.x.y https://github.com/wolfSSL/wolfssl.git`
+2. Replace `system/wolfssl/include/wolfssl/` with the new header tree
+3. Replace `cores/arduino/wolfssl/src/` with the new `src/*.c` files
+4. Replace `cores/arduino/wolfssl/wolfcrypt/src/` with the new `wolfcrypt/src/*.c` files
+5. Test all build profiles: `pio ci tests/build_check.cpp --board=mxchip_az3166 ...`
+6. Update this README with the new version number
