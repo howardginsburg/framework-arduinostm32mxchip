@@ -1,278 +1,197 @@
 // Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. 
-// Modified to use IoT Hub SDK-style buffering and polling
+// Licensed under the MIT license.
+// wolfSSL 5.7.6 backed TLS — replaces mbedTLS in open-source code path.
 
 #include "TLSSocket.h"
-#include "mbedtls/error.h"
+#include <wolfssl/error-ssl.h>
 #include <stdlib.h>
 #include <string.h>
 
-static void tls_log_error(const char* label, int ret)
+static void tls_log_error(const char* label, int err)
 {
-    char buf[128];
-    mbedtls_strerror(ret, buf, sizeof(buf));
-    printf("[TLS] %s: -0x%04X %s\r\n", label, (unsigned int)(-ret), buf);
+    printf("[TLS] %s failed: error %d\r\n", label, err);
 }
 
-#define TLS_CUNSTOM "Arduino TLS Socket"
+#define TLS_CUSTOM_LABEL "Arduino TLS Socket"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// IoT Hub SDK-style SSL callbacks
-// These use the TLSSocket instance pointer to access internal buffer
+// wolfSSL I/O callbacks (IoT Hub SDK-style buffered polling)
 
 /**
- * Receive callback for mbed TLS - IoT Hub SDK style
- * 
- * Uses internal buffer and polling loop like tlsio_mbedtls.c on_io_recv()
+ * wolfSSL receive callback.
+ *
+ * Mirrors the IoT Hub SDK tlsio_mbedtls.c on_io_recv() pattern: it polls
+ * the underlying TCPSocket, buffers any incoming bytes into TLSSocket's
+ * internal _recv_buffer, and returns data to wolfSSL from that buffer.
+ *
+ * During the handshake, if no data is available the callback blocks in a
+ * polling loop (bounded by HANDSHAKE_TIMEOUT_MS).  After the handshake it
+ * returns WOLFSSL_CBIO_ERR_WANT_READ immediately so wolfSSL can indicate
+ * non-blocking WANT_READ to the caller.
  */
-static int ssl_recv(void *ctx, unsigned char *buf, size_t len) 
+static int wolfssl_recv(WOLFSSL *ssl, char *buf, int sz, void *ctx)
 {
-    TLSSocket *tls = static_cast<TLSSocket *>(ctx);
+    (void)ssl;
+    TLSSocket *tls   = static_cast<TLSSocket *>(ctx);
     TCPSocket *socket = tls->_tcp_socket;
     int pending = 0;
-    
-    // IoT Hub SDK style: poll socket until we have data in buffer
+
+    // Fill the internal buffer if it is empty.
     while (tls->_recv_buffer_count == 0)
     {
-        // Try to receive data from underlying socket
         unsigned char temp_buf[128];
         int recv_result = socket->recv(temp_buf, sizeof(temp_buf));
-        
+
         if (recv_result > 0)
         {
-            // Got data - add to internal buffer
             size_t new_size = tls->_recv_buffer_count + recv_result;
-            unsigned char *new_buffer = (unsigned char *)realloc(tls->_recv_buffer, new_size);
+            unsigned char *new_buffer =
+                (unsigned char *)realloc(tls->_recv_buffer, new_size);
             if (new_buffer != NULL)
             {
                 tls->_recv_buffer = new_buffer;
-                memcpy(tls->_recv_buffer + tls->_recv_buffer_count, temp_buf, recv_result);
+                memcpy(tls->_recv_buffer + tls->_recv_buffer_count,
+                       temp_buf, recv_result);
                 tls->_recv_buffer_count = new_size;
             }
-            break;  // Got data, exit polling loop
+            break;
         }
         else if (recv_result == NSAPI_ERROR_WOULD_BLOCK || recv_result == 0)
         {
-            // No data available yet
             if (tls->_handshake_complete)
             {
-                // After handshake, don't block - return WANT_READ
+                // Post-handshake: tell wolfSSL to retry rather than blocking.
                 break;
             }
             else
             {
-                // During handshake: poll with timeout like IoT Hub SDK
+                // During handshake: bounded poll.
                 if (pending++ >= HANDSHAKE_TIMEOUT_MS / HANDSHAKE_WAIT_INTERVAL_MS)
-                {
-                    // Timeout during handshake
-                    return MBEDTLS_ERR_SSL_TIMEOUT;
-                }
+                    return WOLFSSL_CBIO_ERR_TIMEOUT;
                 wait_ms(HANDSHAKE_WAIT_INTERVAL_MS);
             }
         }
         else
         {
-            // Real socket error
-            return -1;
+            return WOLFSSL_CBIO_ERR_GENERAL;
         }
     }
-    
-    // Return data from internal buffer (like IoT Hub SDK on_io_recv)
+
+    // Serve data from the internal buffer.
     int result = (int)tls->_recv_buffer_count;
-    if (result > (int)len)
-    {
-        result = (int)len;
-    }
-    
+    if (result > sz)
+        result = sz;
+
     if (result > 0)
     {
-        // Copy data to caller's buffer
         memcpy(buf, tls->_recv_buffer, result);
-        
-        // Shift remaining data in buffer
         size_t remaining = tls->_recv_buffer_count - result;
         if (remaining > 0)
         {
             memmove(tls->_recv_buffer, tls->_recv_buffer + result, remaining);
             tls->_recv_buffer_count = remaining;
-            
-            // Shrink buffer
-            unsigned char *new_buffer = (unsigned char *)realloc(tls->_recv_buffer, remaining);
-            if (new_buffer != NULL)
-            {
-                tls->_recv_buffer = new_buffer;
-            }
+            unsigned char *shrunken =
+                (unsigned char *)realloc(tls->_recv_buffer, remaining);
+            if (shrunken != NULL)
+                tls->_recv_buffer = shrunken;
         }
         else
         {
-            // Buffer empty
             free(tls->_recv_buffer);
             tls->_recv_buffer = NULL;
             tls->_recv_buffer_count = 0;
         }
-        
         return result;
     }
-    
-    // No data in buffer - tell mbedTLS to try again
-    return MBEDTLS_ERR_SSL_WANT_READ;
+
+    return WOLFSSL_CBIO_ERR_WANT_READ;
 }
 
 /**
- * Send callback for mbed TLS - IoT Hub SDK style
- * 
- * Loops until all data sent or error (like tlsio_mbedtls.c on_io_send)
+ * wolfSSL send callback.
+ *
+ * Loops up to 10 times on NSAPI_ERROR_WOULD_BLOCK, consistent with the
+ * IoT Hub SDK tlsio_mbedtls.c on_io_send() retry pattern.
  */
-static int ssl_send(void *ctx, const unsigned char *buf, size_t len)
+static int wolfssl_send(WOLFSSL *ssl, char *buf, int sz, void *ctx)
 {
-    TLSSocket *tls = static_cast<TLSSocket *>(ctx);
+    (void)ssl;
+    TLSSocket *tls   = static_cast<TLSSocket *>(ctx);
     TCPSocket *socket = tls->_tcp_socket;
-    
-    // IoT Hub SDK style: retry loop for send
+
     for (int i = 0; i < 10; ++i)
     {
-        int size = socket->send(buf, len);
-        
-        if (size > 0)
-        {
-            return size;
-        }
-        else if (size == NSAPI_ERROR_WOULD_BLOCK || size == 0)
-        {
-            // Can't send right now - wait and retry
+        int result = socket->send((const unsigned char *)buf, sz);
+
+        if (result > 0)
+            return result;
+        else if (result == NSAPI_ERROR_WOULD_BLOCK || result == 0)
             wait_ms(100);
-        }
         else
-        {
-            // Real socket error
-            return -1;
-        }
+            return WOLFSSL_CBIO_ERR_GENERAL;
     }
-    
-    // Exhausted retries - tell mbedTLS we sent it (like original devkit-sdk)
-    // This prevents mbedTLS from treating it as fatal error
-    return len;
+
+    // Exhausted retries: pretend the data was sent to avoid a fatal error.
+    return sz;
 }
-
-#if DEBUG_LEVEL > 0
-static void my_debug(void *ctx, int level, const char *file_name, int line, const char *str)
-{
-    char tmp[32];
-    const char *p, *basename;
-    
-    if (file_name != NULL)
-    {
-        /* Extract basename from file */
-        basename = file_name;
-        for (p = basename; *p != '\0'; p++)
-        {
-            if(*p == '/' || *p == '\\')
-            {
-                basename = p + 1;
-            }
-        }
-        
-        INFO(basename);
-    }
-    sprintf(tmp, " %04d: |%d| ", line, level);
-    INFO(tmp);
-    INFO("\r\n");
-}
-
-static int my_verify(void *data, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
-{
-    const uint32_t buf_size = 1024;
-    char *buf = new char[buf_size];
-    (void) data;
-
-    
-    mbedtls_x509_crt_info(buf, buf_size - 1, "  ", crt);
-    
-
-    if (*flags == 0)
-    {
-        INFO("No verification issue for this certificate");
-    }
-    else
-    {
-        mbedtls_x509_crt_verify_info(buf, buf_size, "  ! ", *flags);
-        INFO(buf);
-    }
-
-    delete[] buf;
-    return 0;
-}
-#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// Class
+// Class implementation
 
 void TLSSocket::init_common(NetworkInterface* net_iface)
 {
-    // IoT Hub SDK-style: initialize receive buffer
-    _recv_buffer = NULL;
+    _recv_buffer       = NULL;
     _recv_buffer_count = 0;
     _handshake_complete = false;
-    
-    if (net_iface)
-    {
-        _tcp_socket = new TCPSocket(net_iface);
-    }
-    else
-    {
-        _tcp_socket = NULL;
-    }
+    _ctx = NULL;
+    _ssl = NULL;
 
-    if (_ssl_ca_pem)
-    {
-        // SSL
-        mbedtls_entropy_init(&_entropy);
-        mbedtls_ctr_drbg_init(&_ctr_drbg);
-        mbedtls_x509_crt_init(&_cacert);
-        mbedtls_x509_crt_init(&_clientcert);
-        mbedtls_pk_init(&_clientkey);
-        mbedtls_ssl_init(&_ssl);
-        mbedtls_ssl_config_init(&_ssl_conf);
-    }
+    if (net_iface)
+        _tcp_socket = new TCPSocket(net_iface);
+    else
+        _tcp_socket = NULL;
 }
 
 TLSSocket::TLSSocket(const char *ssl_ca_pem, NetworkInterface* net_iface)
 {
-    _ssl_ca_pem = ssl_ca_pem;
+    _ssl_ca_pem      = ssl_ca_pem;
     _ssl_client_cert = NULL;
-    _ssl_client_key = NULL;
+    _ssl_client_key  = NULL;
     init_common(net_iface);
 }
 
 TLSSocket::TLSSocket(const char *ssl_ca_pem, const char *ssl_client_cert,
                      const char *ssl_client_key, NetworkInterface* net_iface)
 {
-    _ssl_ca_pem = ssl_ca_pem;
+    _ssl_ca_pem      = ssl_ca_pem;
     _ssl_client_cert = ssl_client_cert;
-    _ssl_client_key = ssl_client_key;
+    _ssl_client_key  = ssl_client_key;
     init_common(net_iface);
 }
 
 TLSSocket::~TLSSocket()
 {
-    // Free receive buffer
     if (_recv_buffer != NULL)
     {
         free(_recv_buffer);
         _recv_buffer = NULL;
     }
-    
-    if (_ssl_ca_pem)
+
+    if (_ssl)
     {
-        mbedtls_entropy_free(&_entropy);
-        mbedtls_ctr_drbg_free(&_ctr_drbg);
-        mbedtls_x509_crt_free(&_cacert);
-        mbedtls_x509_crt_free(&_clientcert);
-        mbedtls_pk_free(&_clientkey);
-        mbedtls_ssl_free(&_ssl);
-        mbedtls_ssl_config_free(&_ssl_conf);
+        wolfSSL_shutdown(_ssl);
+        wolfSSL_free(_ssl);
+        _ssl = NULL;
     }
-    
+
+    if (_ctx)
+    {
+        wolfSSL_CTX_free(_ctx);
+        _ctx = NULL;
+    }
+
+    wolfSSL_Cleanup();
+
     if (_tcp_socket)
     {
         _tcp_socket->close();
@@ -283,125 +202,157 @@ TLSSocket::~TLSSocket()
 nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
 {
     if (_tcp_socket == NULL)
-    {
         return NSAPI_ERROR_NO_SOCKET;
-    }
-    
+
     if (_ssl_ca_pem == NULL)
     {
-        // No SSL
+        // Plain TCP — no TLS.
         return _tcp_socket->connect(host, port);
     }
-    
-    // Initialize TLS-related stuf.
-    int ret;
-    if ((ret = mbedtls_ctr_drbg_seed(&_ctr_drbg, mbedtls_entropy_func, &_entropy,
-                      (const unsigned char *) TLS_CUNSTOM,
-                      sizeof (TLS_CUNSTOM))) != 0)
+
+    // ── Initialise wolfSSL library ────────────────────────────────────────
+    wolfSSL_Init();
+
+    _ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
+    if (_ctx == NULL)
     {
-        tls_log_error("drbg_seed", ret);
+        tls_log_error("CTX_new", 0);
         return -1;
     }
 
-    if ((ret = mbedtls_x509_crt_parse(&_cacert, (const unsigned char *)_ssl_ca_pem,
-                       strlen(_ssl_ca_pem) + 1)) != 0)
+    // Register custom I/O callbacks so wolfSSL uses our TCPSocket layer.
+    wolfSSL_CTX_SetIORecv(_ctx, wolfssl_recv);
+    wolfSSL_CTX_SetIOSend(_ctx, wolfssl_send);
+
+    // ── Load CA certificate for server authentication ─────────────────────
+    int ret = wolfSSL_CTX_load_verify_buffer(
+                  _ctx,
+                  (const unsigned char *)_ssl_ca_pem,
+                  (long)strlen(_ssl_ca_pem),
+                  SSL_FILETYPE_PEM);
+    if (ret != WOLFSSL_SUCCESS)
     {
-        tls_log_error("CA cert parse", ret);
+        tls_log_error("load_verify_buffer", ret);
         return -1;
     }
 
-    if ((ret = mbedtls_ssl_config_defaults(&_ssl_conf,
-                    MBEDTLS_SSL_IS_CLIENT,
-                    MBEDTLS_SSL_TRANSPORT_STREAM,
-                    MBEDTLS_SSL_PRESET_DEFAULT)) != 0)
-    {
-        tls_log_error("ssl_config_defaults", ret);
-        return -1;
-    }
+    wolfSSL_CTX_set_verify(_ctx, WOLFSSL_VERIFY_PEER, NULL);
 
-    mbedtls_ssl_conf_ca_chain(&_ssl_conf, &_cacert, NULL);
-    mbedtls_ssl_conf_rng(&_ssl_conf, mbedtls_ctr_drbg_random, &_ctr_drbg);
-
-    /* It is possible to disable authentication by passing
-     * MBEDTLS_SSL_VERIFY_NONE in the call to mbedtls_ssl_conf_authmode()
-     */
-    mbedtls_ssl_conf_authmode(&_ssl_conf, MBEDTLS_SSL_VERIFY_REQUIRED);
-    
-    // Configure client certificate for mutual TLS if provided
+    // ── Load client certificate + key for mutual TLS ──────────────────────
     if (_ssl_client_cert != NULL && _ssl_client_key != NULL)
     {
-        if ((ret = mbedtls_x509_crt_parse(&_clientcert, (const unsigned char *)_ssl_client_cert,
-                           strlen(_ssl_client_cert) + 1)) != 0)
+        ret = wolfSSL_CTX_use_certificate_buffer(
+                  _ctx,
+                  (const unsigned char *)_ssl_client_cert,
+                  (long)strlen(_ssl_client_cert),
+                  SSL_FILETYPE_PEM);
+        if (ret != WOLFSSL_SUCCESS)
         {
-            tls_log_error("client cert parse", ret);
+            tls_log_error("use_certificate_buffer", ret);
             return -1;
         }
-        
-        if ((ret = mbedtls_pk_parse_key(&_clientkey, (const unsigned char *)_ssl_client_key,
-                         strlen(_ssl_client_key) + 1, NULL, 0)) != 0)
+
+        ret = wolfSSL_CTX_use_PrivateKey_buffer(
+                  _ctx,
+                  (const unsigned char *)_ssl_client_key,
+                  (long)strlen(_ssl_client_key),
+                  SSL_FILETYPE_PEM);
+        if (ret != WOLFSSL_SUCCESS)
         {
-            tls_log_error("private key parse", ret);
-            return -1;
-        }
-        
-        if ((ret = mbedtls_ssl_conf_own_cert(&_ssl_conf, &_clientcert, &_clientkey)) != 0)
-        {
-            tls_log_error("ssl_conf_own_cert", ret);
+            tls_log_error("use_PrivateKey_buffer", ret);
             return -1;
         }
     }
 
-#if DEBUG_LEVEL > 0
-    mbedtls_ssl_conf_verify(&_ssl_conf, my_verify, NULL);
-    mbedtls_ssl_conf_dbg(&_ssl_conf, my_debug, NULL);
-    mbedtls_debug_set_threshold(DEBUG_LEVEL);
-#endif
-
-    if ((ret = mbedtls_ssl_setup(&_ssl, &_ssl_conf)) != 0)
+    // ── Create SSL session ────────────────────────────────────────────────
+    _ssl = wolfSSL_new(_ctx);
+    if (_ssl == NULL)
     {
-        tls_log_error("ssl_setup", ret);
+        tls_log_error("wolfSSL_new", 0);
         return -1;
     }
-    
-    mbedtls_ssl_set_hostname(&_ssl, host);
-    
-    // IoT Hub SDK style: pass TLSSocket pointer to callbacks for buffer access
-    mbedtls_ssl_set_bio(&_ssl, static_cast<void *>(this), ssl_send, ssl_recv, NULL);
-    
-    /* Connect to the server */
+
+    // SNI: send the server hostname in the ClientHello.
+    wolfSSL_UseSNI(_ssl, WOLFSSL_SNI_HOST_NAME,
+                   host, (unsigned short)strlen(host));
+
+    // Bind the TLSSocket instance as the context pointer for I/O callbacks.
+    wolfSSL_SetIOReadCtx(_ssl,  static_cast<void *>(this));
+    wolfSSL_SetIOWriteCtx(_ssl, static_cast<void *>(this));
+
+    // Tell wolfSSL that the underlying transport is non-blocking.
+    wolfSSL_set_using_nonblock(_ssl, 1);
+
+    // ── TCP connect ───────────────────────────────────────────────────────
     ret = _tcp_socket->connect(host, port);
     if (ret != NSAPI_ERROR_OK)
     {
         printf("[TLS] TCP connect failed: %d\r\n", ret);
         return ret;
     }
-    printf("[TLS] TCP connected, starting handshake...\r\n");
-    
-    // IoT Hub SDK style: set socket to non-blocking for polling
-    _tcp_socket->set_blocking(false);
-    _tcp_socket->set_timeout(100);  // Short timeout for polling
+    printf("[TLS] TCP connected, starting TLS handshake...\r\n");
 
-    /* Start the handshake - IoT Hub SDK style: loop until complete */
+    // Short timeout on reads so the handshake poll loop doesn't stall.
+    _tcp_socket->set_blocking(false);
+    _tcp_socket->set_timeout(100);
+
+    // ── TLS handshake ─────────────────────────────────────────────────────
     _handshake_complete = false;
     do
     {
-        ret = mbedtls_ssl_handshake(&_ssl);
-    } while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
-    
-    if (ret < 0) 
-    {
-        tls_log_error("handshake", ret);
-        uint32_t flags = mbedtls_ssl_get_verify_result(&_ssl);
-        if (flags != 0)
+        ret = wolfSSL_connect(_ssl);
+        if (ret != WOLFSSL_SUCCESS)
         {
-            char vrfy[512];
-            mbedtls_x509_crt_verify_info(vrfy, sizeof(vrfy), "  ! ", flags);
-            printf("[TLS] verify flags=0x%08X\r\n%s\r\n", (unsigned int)flags, vrfy);
+            int err = wolfSSL_get_error(_ssl, ret);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+            {
+                wait_ms(HANDSHAKE_WAIT_INTERVAL_MS);
+            }
+            else
+            {
+                tls_log_error("handshake", err);
+                return -1;
+            }
         }
-        return -1;
-    }
-    
+    } while (ret != WOLFSSL_SUCCESS);
+
     printf("[TLS] Handshake complete.\r\n");
+
+    // ── Print session details ─────────────────────────────────────────────
+    printf("[TLS] Version:    %s\r\n", wolfSSL_get_version(_ssl));
+    printf("[TLS] Cipher:     %s\r\n", wolfSSL_get_cipher(_ssl));
+
+    WOLFSSL_X509 *peer = wolfSSL_get_peer_certificate(_ssl);
+    if (peer != NULL)
+    {
+        char buf[128];
+        wolfSSL_X509_NAME_oneline(
+            wolfSSL_X509_get_subject_name(peer), buf, sizeof(buf));
+        printf("[TLS] Server:     %s\r\n", buf);
+        wolfSSL_X509_NAME_oneline(
+            wolfSSL_X509_get_issuer_name(peer), buf, sizeof(buf));
+        printf("[TLS] Issuer:     %s\r\n", buf);
+        wolfSSL_FreeX509(peer);
+    }
+
+    if (_ssl_client_cert != NULL)
+    {
+        WOLFSSL_X509 *local = wolfSSL_X509_load_certificate_buffer(
+            (const unsigned char *)_ssl_client_cert,
+            (int)strlen(_ssl_client_cert), SSL_FILETYPE_PEM);
+        if (local != NULL)
+        {
+            char buf[128];
+            wolfSSL_X509_NAME_oneline(
+                wolfSSL_X509_get_subject_name(local), buf, sizeof(buf));
+            printf("[TLS] Client:     %s\r\n", buf);
+            wolfSSL_X509_NAME_oneline(
+                wolfSSL_X509_get_issuer_name(local), buf, sizeof(buf));
+            printf("[TLS] Client CA:  %s\r\n", buf);
+            wolfSSL_FreeX509(local);
+        }
+    }
+
     _handshake_complete = true;
     return NSAPI_ERROR_OK;
 }
@@ -409,97 +360,80 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
 nsapi_error_t TLSSocket::close()
 {
     if (_tcp_socket == NULL)
-    {
         return NSAPI_ERROR_NO_SOCKET;
-    }
     return _tcp_socket->close();
 }
 
 nsapi_size_or_error_t TLSSocket::send(const void *data, nsapi_size_t size)
 {
     if (_tcp_socket == NULL)
-    {
         return NSAPI_ERROR_NO_SOCKET;
-    }
-    
+
     if (_ssl_ca_pem == NULL)
     {
-        // No SSL - use direct TCP send with retry
-        const unsigned char *ptr = (const unsigned char *)data;
+        // Plain TCP send with retry.
+        const unsigned char *ptr  = (const unsigned char *)data;
         size_t total_sent = 0;
-        
         while (total_sent < size)
         {
             int result = _tcp_socket->send(ptr + total_sent, size - total_sent);
             if (result > 0)
-            {
                 total_sent += result;
-            }
             else if (result == NSAPI_ERROR_WOULD_BLOCK || result == 0)
-            {
                 wait_ms(100);
-            }
             else
-            {
-                return result;  // Real error
-            }
+                return result;
         }
         return (nsapi_size_or_error_t)size;
     }
 
-    // IoT Hub SDK style: loop until all data sent
+    // TLS send: loop until all bytes are written.
     const unsigned char *ptr = (const unsigned char *)data;
     int out_left = (int)size;
-    
+
     do
     {
-        int ret = mbedtls_ssl_write(&_ssl, ptr + (size - out_left), out_left);
-        
+        int ret = wolfSSL_write(_ssl, ptr + (size - out_left), out_left);
+
         if (ret > 0)
         {
             out_left -= ret;
         }
-        else if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
-        {
-            // Non-fatal: retry
-            wait_ms(10);
-        }
         else
         {
-            // Real error
-            return ret;
+            int err = wolfSSL_get_error(_ssl, ret);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+                wait_ms(10);
+            else
+                return WOLFSSL_FATAL_ERROR;
         }
     } while (out_left > 0);
-    
+
     return (nsapi_size_or_error_t)size;
 }
 
 nsapi_size_or_error_t TLSSocket::recv(void *data, nsapi_size_t size)
 {
     if (_tcp_socket == NULL)
-    {
         return NSAPI_ERROR_NO_SOCKET;
-    }
-    
+
     if (_ssl_ca_pem == NULL)
     {
-        // No SSL
+        // Plain TCP receive.
         return _tcp_socket->recv(data, size);
     }
 
-    // IoT Hub SDK style: decode received bytes with retry
-    int ret = mbedtls_ssl_read(&_ssl, (unsigned char*)data, size);
-    
-    if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
-    {
-        // No data available - return 0 (not error)
-        return 0;
-    }
-    else if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY)
-    {
-        // Graceful close
-        return 0;
-    }
-    
-    return ret;
+    int ret = wolfSSL_read(_ssl, data, (int)size);
+
+    if (ret > 0)
+        return (nsapi_size_or_error_t)ret;
+
+    if (ret == 0)
+        return 0;  // graceful close
+
+    int err = wolfSSL_get_error(_ssl, ret);
+    if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+        return 0;  // no data yet — caller should retry
+
+    return WOLFSSL_FATAL_ERROR;
 }

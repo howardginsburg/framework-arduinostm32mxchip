@@ -54,7 +54,7 @@ API documentation for the Arduino runtime in `cores/arduino/`:
 | [Arduino API](cores/ArduinoAPI.md) | Digital/analog I/O, timing, serial, interrupts, math, strings |
 | [OLED Display](cores/OledDisplay.md) | 128×64 OLED screen driver (`Screen` global) |
 | [EEPROM](cores/EEPROM.md) | STSAFE-A100 secure element storage zones |
-| [TLS Socket](cores/TLSSocket.md) | mbedTLS-based secure socket (server-only and mutual TLS) |
+| [TLS Socket](cores/TLSSocket.md) | wolfSSL-based secure socket (server-only and mutual TLS) |
 | [Watchdog](cores/Watchdog.md) | Hardware independent watchdog timer (IWDG) |
 | [DeviceConfig](cores/DeviceConfig.md) | Profile-based configuration system, validation, CLI, and web UI |
 | [HTTP Client](cores/HTTPClient.md) | HTTP/HTTPS request client with URL parsing |

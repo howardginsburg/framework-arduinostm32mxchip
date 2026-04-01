@@ -19,6 +19,24 @@ Replace `v2.2.1` with any tag listed below.
 
 ---
 
+## [2.3.1] - 2026-03-29
+
+### Changed
+- **TLS/crypto migrated from mbedTLS to wolfSSL 5.7.6** — the `TLSSocket` layer, `AzureIoTCrypto` (HMAC-SHA256, Base64), and X.509 certificate parsing in `DeviceConfigRuntime` now use wolfSSL/wolfCrypt exclusively; adds TLS 1.3 support alongside TLS 1.2
+- **`DeviceConfigRuntime.cpp`** — `extractCNFromCert()` rewritten to use wolfCrypt (`wc_CertPemToDer`, `wc_InitDecodedCert`, `wc_ParseCert`, `DecodedCert.subjectCN`) instead of mbedTLS `mbedtls_x509_crt_parse`
+- **`console_cli.cpp`** — version command now prints wolfSSL version (`LIBWOLFSSL_VERSION_STRING`) instead of mbed TLS version
+
+### Fixed
+- **`TLSSocket.cpp`** — PEM buffer length passed to `wolfSSL_CTX_load_verify_buffer()`, `wolfSSL_CTX_use_certificate_buffer()`, and `wolfSSL_CTX_use_PrivateKey_buffer()` no longer includes the null terminator (`strlen()` instead of `strlen() + 1`); the extra byte could cause PEM parsing failures with certain certificates
+- **`user_settings.h`** — added `WOLFSSL_ALT_CERT_CHAINS` to enable flexible certificate chain verification; required for Azure endpoints that present intermediate certificates in non-strict order or when the loaded CA is an intermediate rather than the ultimate root
+
+### Notes
+- mbed OS 5.4 remains in use for RTOS, HAL, drivers, networking sockets (TCPSocket/UDPSocket), filesystem, and lwIP
+- Pre-compiled binaries (`libdevkit-sdk-core-lib.a`, `libstsafe.a`) still link mbedTLS internally; the mbedTLS headers in `system/mbed-os/features/mbedtls/` are retained for those dependencies
+- No changes to sketch-level APIs — existing projects require no code changes
+
+---
+
 ## [2.3.0] - 2026-02-23
 
 ### Added
@@ -73,6 +91,7 @@ Replace `v2.2.1` with any tag listed below.
 - Board telemetry collector (defunct Microsoft telemetry service)
 - Original Paho MQTT library (did not support mTLS connections)
 
+[2.4.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.4.0
 [2.3.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.3.0
 [2.2.1]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.2.1
 [2.1.0]: https://github.com/howardginsburg/framework-arduinostm32mxchip/releases/tag/v2.1.0

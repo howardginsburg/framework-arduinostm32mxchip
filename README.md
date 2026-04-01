@@ -58,8 +58,8 @@ The **MXChip AZ3166 IoT DevKit** features ARM Cortex-M processors with:
 ├────────────────────────────────────────────────────────────────┤
 │                         Platform Layer                         │
 │ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
-│ │   mbed OS 5.4    │ │    MiCO WiFi     │ │     mbedTLS      │ │
-│ │    RTOS · HAL    │ │     EMW10xx      │ │   TLS 1.1/1.2    │ │
+│ │   mbed OS 5.4    │ │    MiCO WiFi     │ │  wolfSSL 5.7.6   │ │
+│ │    RTOS · HAL    │ │     EMW10xx      │ │  TLS 1.2 / 1.3   │ │
 │ │     Drivers      │ │    lwIP Stack    │ │   X.509 · SAS    │ │
 │ └──────────────────┘ └──────────────────┘ └──────────────────┘ │
 ├────────────────────────────────────────────────────────────────┤
@@ -100,7 +100,7 @@ This fork includes significant modifications from the original SDK:
 | Feature | Description |
 |---------|-------------|
 | **WiFiClientSecure** | Arduino-compatible TLS client for use with any MQTT library (e.g., PubSubClient) |
-| **TLSSocket improvements** | Revamped the TLS socket layer to remediate bugs, etc when using MQTT mTLS (see [TLSPATCH.md](docs/TLSPATCH.md)) |
+| **TLSSocket + wolfSSL 5.7.6** | Migrated TLS/crypto from mbedTLS to wolfSSL 5.7.6, adding TLS 1.3 support; revamped the TLS socket layer with IoT Hub SDK-style polling for stable MQTT mTLS (see [TLSPATCH.md](docs/TLSPATCH.md)) |
 | **Connection Profiles** | Pre-defined connection profiles for MQTT, Azure IoT Hub, and Azure DPS |
 | **DeviceConfig System** | Unified configuration storage: security-sensitive settings in the STSAFE secure element; operational settings (`send_interval`, `publish_topic`, `subscribe_topic`) in a config file on SFlash |
 | **Config-file backed settings** | `SETTING_SEND_INTERVAL`, `SETTING_PUBLISH_TOPIC`, and `SETTING_SUBSCRIBE_TOPIC` stored in `/fs/device.cfg` on the onboard SFlash FAT filesystem, configurable via CLI and Web UI |

@@ -13,7 +13,7 @@ mbed OS 5.4.3 provides the RTOS kernel, hardware abstraction, networking, filesy
 | CMSIS | `cmsis/` | ARM Cortex-M core headers |
 | Drivers | `drivers/` | mbed driver abstractions (DigitalOut, I2C, SPI, Serial, etc.) |
 | Events | `events/` | EventQueue for deferred execution |
-| Features | `features/` | Storage, networking (lwIP/NSAPI), mbedTLS |
+| Features | `features/` | Storage, networking (lwIP/NSAPI) |
 | HAL | `hal/` | Hardware Abstraction Layer |
 | Platform | `platform/` | Platform utilities (Callback, CriticalSection, etc.) |
 | RTOS | `rtos/` | Thread, Mutex, Semaphore, Queue, EventFlags |
@@ -37,11 +37,16 @@ Key defines from [system/mbed_config.h](../../system/mbed_config.h):
 | `MBED_STACK_STATS_ENABLED` | 1 | Stack usage statistics |
 | `MBED_HEAP_STATS_ENABLED` | 1 | Heap usage statistics |
 
-### TLS Configuration
+### TLS Configuration (Legacy)
+
+The mbedTLS defines below remain in `mbed_config.h` because the pre-compiled
+binaries (`libdevkit-sdk-core-lib.a`, `libstsafe.a`) link mbedTLS internally.
+The framework's own TLS/crypto operations now use **wolfSSL 5.7.6** — see
+[TLS Socket](../cores/TLSSocket.md) and [TLSPATCH](../TLSPATCH.md).
 
 | Define | Description |
 |--------|-------------|
-| `USE_MBED_TLS` | Enable mbedTLS |
+| `USE_MBED_TLS` | Required by pre-compiled binaries |
 | `MBEDTLS_SSL_PROTO_TLS1_1` | TLS 1.1 support |
 | `MBEDTLS_SSL_PROTO_TLS1_2` | TLS 1.2 support |
 | `MBEDTLS_SHA256_C` | SHA-256 enabled |

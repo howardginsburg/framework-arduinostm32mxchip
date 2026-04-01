@@ -13,7 +13,8 @@
 #define _DEVICE_CONFIG_IMPL
 #include "DeviceConfig.h"
 #include "DeviceConfigZones.h"
-#include "mbedtls/x509_crt.h"
+#include <wolfssl/wolfcrypt/asn.h>
+#include <wolfssl/wolfcrypt/asn_public.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -114,7 +115,7 @@ static void parseBrokerUrl(const char* url)
 /**
  * @brief Extract CN (Common Name) from a PEM certificate
  * 
- * Uses mbedtls to parse the X.509 certificate and extract the CN from
+ * Uses wolfCrypt to parse the X.509 certificate and extract the CN from
  * the subject distinguished name.
  * 
  * @param cert PEM certificate string
@@ -130,45 +131,48 @@ static void extractCNFromCert(const char* cert, char* cnBuffer, int bufferSize)
         return;
     }
     
-    mbedtls_x509_crt crt;
-    mbedtls_x509_crt_init(&crt);
+    // Convert PEM to DER
+    int pemLen = (int)strlen(cert);
+    int derMaxLen = pemLen; // DER is always smaller than PEM
+    unsigned char* derBuf = (unsigned char*)malloc(derMaxLen);
+    if (derBuf == NULL)
+    {
+        return;
+    }
     
-    // Parse the PEM certificate (length must include null terminator)
-    int ret = mbedtls_x509_crt_parse(&crt, (const unsigned char*)cert, strlen(cert) + 1);
+    int derLen = wc_CertPemToDer((
+        const unsigned char*)cert, pemLen, derBuf, derMaxLen, CERT_TYPE);
+    if (derLen <= 0)
+    {
+        free(derBuf);
+        return;
+    }
+    
+    // Parse the DER certificate
+    DecodedCert dCert;
+    wc_InitDecodedCert(&dCert, derBuf, (word32)derLen, NULL);
+    int ret = wc_ParseCert(&dCert, CERT_TYPE, 0, NULL);
     if (ret != 0)
     {
-        mbedtls_x509_crt_free(&crt);
+        wc_FreeDecodedCert(&dCert);
+        free(derBuf);
         return;
     }
     
-    // Get the subject as a formatted string (e.g., "CN=Device1, O=Contoso, C=US")
-    char subject[256];
-    ret = mbedtls_x509_dn_gets(subject, sizeof(subject), &crt.subject);
-    mbedtls_x509_crt_free(&crt);
-    
-    if (ret < 0)
+    // Copy the CN from the parsed certificate
+    if (dCert.subjectCN != NULL && dCert.subjectCNLen > 0)
     {
-        return;
+        int copyLen = dCert.subjectCNLen;
+        if (copyLen >= bufferSize)
+        {
+            copyLen = bufferSize - 1;
+        }
+        memcpy(cnBuffer, dCert.subjectCN, copyLen);
+        cnBuffer[copyLen] = '\0';
     }
     
-    // Extract CN value from the formatted subject string
-    const char* cnStart = strstr(subject, "CN=");
-    if (cnStart == NULL)
-    {
-        return;
-    }
-    
-    cnStart += 3;  // Skip "CN="
-    int i = 0;
-    while (cnStart[i] != '\0' && 
-           cnStart[i] != ',' && 
-           cnStart[i] != ' ' &&
-           i < bufferSize - 1)
-    {
-        cnBuffer[i] = cnStart[i];
-        i++;
-    }
-    cnBuffer[i] = '\0';
+    wc_FreeDecodedCert(&dCert);
+    free(derBuf);
 }
 
 /**
