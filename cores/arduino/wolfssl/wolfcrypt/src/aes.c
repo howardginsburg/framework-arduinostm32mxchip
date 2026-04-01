@@ -94,7 +94,7 @@ block cipher mechanism that uses n-bit binary string parameter key with 128-bits
 #endif
 
 #if defined(WOLFSSL_TI_CRYPT)
-    #include <wolfcrypt/src/port/ti/ti-aes.c>
+    #include "port/ti/ti-aes.c"
 #else
 
 #include <wolfssl/wolfcrypt/logging.h>
@@ -103,7 +103,7 @@ block cipher mechanism that uses n-bit binary string parameter key with 128-bits
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #if (!defined(WOLFSSL_ARMASM) || defined(__aarch64__)) && \

@@ -43,7 +43,7 @@ or Authenticated Encryption with Additional Data (AEAD) algorithm.
 #include <wolfssl/wolfcrypt/misc.h>
 #else
 #define WOLFSSL_MISC_INCLUDED
-#include <wolfcrypt/src/misc.c>
+#include "misc.c"
 #endif
 
 #define CHACHA20_POLY1305_AEAD_INITIAL_COUNTER  0

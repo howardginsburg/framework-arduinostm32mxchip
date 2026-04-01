@@ -43,7 +43,7 @@ Public domain.
         #include <wolfssl/wolfcrypt/misc.h>
     #else
         #define WOLFSSL_MISC_INCLUDED
-        #include <wolfcrypt/src/misc.c>
+        #include "misc.c"
     #endif
 
     #ifdef BIG_ENDIAN_ORDER

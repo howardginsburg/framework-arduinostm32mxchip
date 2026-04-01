@@ -16,7 +16,7 @@ The `cores/arduino/` directory contains the Arduino-compatible runtime for the M
 |----------|-------------|
 | [OLED Display](OledDisplay.md) | 128×64 OLED screen driver (`Screen` global) |
 | [EEPROM](EEPROM.md) | STSAFE-A100 secure element storage zones |
-| [TLS Socket](TLSSocket.md) | mbedTLS-based secure socket (server-only and mutual TLS) |
+| [TLS Socket](TLSSocket.md) | wolfSSL-based secure socket (server-only and mutual TLS) |
 | [Watchdog](Watchdog.md) | Hardware independent watchdog timer (IWDG) |
 
 ## Device Configuration

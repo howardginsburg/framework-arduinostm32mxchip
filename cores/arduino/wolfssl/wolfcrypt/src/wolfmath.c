@@ -44,7 +44,7 @@
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #if !defined(NO_BIG_INT) || defined(WOLFSSL_SP_MATH)

@@ -22,6 +22,64 @@
 #include <stdio.h>
 #include <string.h>
 
+/**
+ * Simple raw-base64 decoder for Azure IoT keys.
+ *
+ * wolfSSL's Base64_Decode is PEM-oriented and assumes newlines at 64-char
+ * boundaries.  Azure symmetric keys are raw base64 with no embedded newlines,
+ * which can trip the PEM estimator.  This tiny decoder handles standard
+ * base64 (RFC 4648) without any line-length assumptions.
+ */
+static int base64DecodeChar(byte c)
+{
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
+}
+
+static int rawBase64Decode(const byte* in, word32 inLen, byte* out, word32* outLen)
+{
+    /* Strip trailing padding and whitespace */
+    while (inLen > 0 && (in[inLen - 1] == '=' || in[inLen - 1] == '\n' ||
+           in[inLen - 1] == '\r' || in[inLen - 1] == ' '))
+        inLen--;
+
+    word32 maxOut = *outLen;
+    word32 i = 0, o = 0;
+
+    while (i < inLen) {
+        /* Skip whitespace */
+        if (in[i] == ' ' || in[i] == '\r' || in[i] == '\n') { i++; continue; }
+
+        int a = base64DecodeChar(in[i++]);
+        int b = (i < inLen) ? base64DecodeChar(in[i++]) : -1;
+        if (a < 0 || b < 0) return -1;
+
+        if (o >= maxOut) return -1;
+        out[o++] = (byte)((a << 2) | (b >> 4));
+
+        if (i >= inLen) break;
+        if (in[i] == '=') break;
+        int c = base64DecodeChar(in[i++]);
+        if (c < 0) return -1;
+        if (o >= maxOut) return -1;
+        out[o++] = (byte)(((b & 0x0F) << 4) | (c >> 2));
+
+        if (i >= inLen) break;
+        if (in[i] == '=') break;
+        int d = base64DecodeChar(in[i++]);
+        if (d < 0) return -1;
+        if (o >= maxOut) return -1;
+        out[o++] = (byte)(((c & 0x03) << 6) | d);
+    }
+
+    *outLen = o;
+    return 0;
+}
+
 void AzureIoT_UrlEncode(const char* input, char* output, size_t outputSize)
 {
     size_t j = 0;
@@ -92,8 +150,8 @@ bool AzureIoT_GenerateSasToken(const char* resourceUri, const char* signingKey,
     // Base64-decode the signing key
     unsigned char decodedKey[64];
     word32 decodedKeyLen = sizeof(decodedKey);
-    int ret = Base64_Decode((const byte *)signingKey, (word32)strlen(signingKey),
-                            decodedKey, &decodedKeyLen);
+    int ret = rawBase64Decode((const byte *)signingKey, (word32)strlen(signingKey),
+                              decodedKey, &decodedKeyLen);
     if (ret != 0)
     {
         Serial.print("[AzureIoT] Failed to decode key! Error: ");
@@ -146,11 +204,12 @@ bool AzureIoT_DeriveGroupKey(const char* groupKey, const char* registrationId,
     // Base64-decode the group key
     unsigned char decodedGroupKey[64];
     word32 decodedKeyLen = sizeof(decodedGroupKey);
-    int ret = Base64_Decode((const byte *)groupKey, (word32)strlen(groupKey),
-                            decodedGroupKey, &decodedKeyLen);
+    int ret = rawBase64Decode((const byte *)groupKey, (word32)strlen(groupKey),
+                              decodedGroupKey, &decodedKeyLen);
     if (ret != 0)
     {
-        Serial.println("[DPS] Failed to decode group key!");
+        Serial.print("[DPS] Failed to decode group key! keyLen=");
+        Serial.println((int)strlen(groupKey));
         return false;
     }
 

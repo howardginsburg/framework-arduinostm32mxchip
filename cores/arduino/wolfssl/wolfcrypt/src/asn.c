@@ -136,7 +136,7 @@ ASN Options:
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #ifndef NO_RC4

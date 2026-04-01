@@ -106,7 +106,7 @@
 #endif
 
 #if defined(WOLFSSL_TI_HASH)
-    /* #include <wolfcrypt/src/port/ti/ti-hash.c> included by wc_port.c */
+    /* #include "port/ti/ti-hash.c" included by wc_port.c */
 
 #else
 
@@ -115,7 +115,7 @@
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #if FIPS_VERSION3_GE(6,0,0)

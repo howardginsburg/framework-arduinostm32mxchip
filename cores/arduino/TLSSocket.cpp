@@ -228,7 +228,7 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     int ret = wolfSSL_CTX_load_verify_buffer(
                   _ctx,
                   (const unsigned char *)_ssl_ca_pem,
-                  (long)(strlen(_ssl_ca_pem) + 1),
+                  (long)strlen(_ssl_ca_pem),
                   SSL_FILETYPE_PEM);
     if (ret != WOLFSSL_SUCCESS)
     {
@@ -244,7 +244,7 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
         ret = wolfSSL_CTX_use_certificate_buffer(
                   _ctx,
                   (const unsigned char *)_ssl_client_cert,
-                  (long)(strlen(_ssl_client_cert) + 1),
+                  (long)strlen(_ssl_client_cert),
                   SSL_FILETYPE_PEM);
         if (ret != WOLFSSL_SUCCESS)
         {
@@ -255,7 +255,7 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
         ret = wolfSSL_CTX_use_PrivateKey_buffer(
                   _ctx,
                   (const unsigned char *)_ssl_client_key,
-                  (long)(strlen(_ssl_client_key) + 1),
+                  (long)strlen(_ssl_client_key),
                   SSL_FILETYPE_PEM);
         if (ret != WOLFSSL_SUCCESS)
         {
@@ -317,6 +317,42 @@ nsapi_error_t TLSSocket::connect(const char *host, uint16_t port)
     } while (ret != WOLFSSL_SUCCESS);
 
     printf("[TLS] Handshake complete.\r\n");
+
+    // ── Print session details ─────────────────────────────────────────────
+    printf("[TLS] Version:    %s\r\n", wolfSSL_get_version(_ssl));
+    printf("[TLS] Cipher:     %s\r\n", wolfSSL_get_cipher(_ssl));
+
+    WOLFSSL_X509 *peer = wolfSSL_get_peer_certificate(_ssl);
+    if (peer != NULL)
+    {
+        char buf[128];
+        wolfSSL_X509_NAME_oneline(
+            wolfSSL_X509_get_subject_name(peer), buf, sizeof(buf));
+        printf("[TLS] Server:     %s\r\n", buf);
+        wolfSSL_X509_NAME_oneline(
+            wolfSSL_X509_get_issuer_name(peer), buf, sizeof(buf));
+        printf("[TLS] Issuer:     %s\r\n", buf);
+        wolfSSL_FreeX509(peer);
+    }
+
+    if (_ssl_client_cert != NULL)
+    {
+        WOLFSSL_X509 *local = wolfSSL_X509_load_certificate_buffer(
+            (const unsigned char *)_ssl_client_cert,
+            (int)strlen(_ssl_client_cert), SSL_FILETYPE_PEM);
+        if (local != NULL)
+        {
+            char buf[128];
+            wolfSSL_X509_NAME_oneline(
+                wolfSSL_X509_get_subject_name(local), buf, sizeof(buf));
+            printf("[TLS] Client:     %s\r\n", buf);
+            wolfSSL_X509_NAME_oneline(
+                wolfSSL_X509_get_issuer_name(local), buf, sizeof(buf));
+            printf("[TLS] Client CA:  %s\r\n", buf);
+            wolfSSL_FreeX509(local);
+        }
+    }
+
     _handshake_complete = true;
     return NSAPI_ERROR_OK;
 }

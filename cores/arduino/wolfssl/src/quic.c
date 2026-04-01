@@ -31,7 +31,7 @@
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "../wolfcrypt/src/misc.c"
 #endif
 
 #ifndef WOLFCRYPT_ONLY

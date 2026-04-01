@@ -34,6 +34,8 @@
 /* ─────────────────────────────────────────────────────────────────────────── */
 #define WOLFSSL_TLS13            /* TLS 1.3 support                           */
 #define NO_OLD_TLS               /* Disable TLS 1.0 / 1.1                    */
+#define WOLFSSL_ALT_CERT_CHAINS  /* Flexible cert chain verify (Azure uses    */
+                                 /*   intermediates not in strict order)      */
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Asymmetric crypto                                                         */
@@ -68,6 +70,7 @@
 /*  Build-mode: client-only                                                   */
 /* ─────────────────────────────────────────────────────────────────────────── */
 #define NO_WOLFSSL_SERVER        /* Strip all server-side code                */
+#define KEEP_PEER_CERT           /* Retain peer cert for post-handshake info  */
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Disable algorithms we do not use                                          */

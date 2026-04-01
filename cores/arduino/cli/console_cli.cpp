@@ -3,7 +3,7 @@
  
 #include "mbed.h"
 #include "mico.h"
-#include "mbedtls/version.h"
+#include <wolfssl/version.h>
 #include "EEPROMInterface.h"
 #include "SystemWiFi.h"
 #include "SystemVersion.h"
@@ -86,7 +86,7 @@ static void get_version_command(int argc, char **argv)
     Serial.printf( "DevKitSDK version: %s\r\n", getDevkitVersion() );
     Serial.printf( "Mico version: %s\r\n", MicoGetVer() );
     Serial.printf( "mbed-os version: %d.%d.%d\r\n", MBED_MAJOR_VERSION, MBED_MINOR_VERSION, MBED_PATCH_VERSION );
-    Serial.printf( "mbed TLS version: %d.%d.%d\r\n", MBEDTLS_VERSION_MAJOR, MBEDTLS_VERSION_MINOR, MBEDTLS_VERSION_PATCH);
+    Serial.printf( "wolfSSL version: %s\r\n", LIBWOLFSSL_VERSION_STRING);
         
     memset(ver, 0, sizeof(ver));
     ret = MicoGetRfVer(ver, sizeof(ver));

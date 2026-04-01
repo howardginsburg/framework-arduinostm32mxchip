@@ -116,7 +116,7 @@ on the specific device platform.
 #endif
 
 #if defined(WOLFSSL_TI_HASH)
-    /* #include <wolfcrypt/src/port/ti/ti-hash.c> included by wc_port.c */
+    /* #include "port/ti/ti-hash.c" included by wc_port.c */
 #elif defined(WOLFSSL_CRYPTOCELL)
     /* wc_port.c includes wolfcrypt/src/port/arm/cryptoCellHash.c */
 
@@ -133,7 +133,7 @@ on the specific device platform.
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #ifdef WOLFSSL_DEVCRYPTO_HASH

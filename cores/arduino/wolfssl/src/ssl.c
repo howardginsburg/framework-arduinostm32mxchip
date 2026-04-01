@@ -41,7 +41,7 @@
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "../wolfcrypt/src/misc.c"
 #endif
 
 #ifdef HAVE_ERRNO_H
@@ -179,21 +179,21 @@
  */
 
 #define WOLFSSL_SSL_MISC_INCLUDED
-#include "src/ssl_misc.c"
+#include "ssl_misc.c"
 
 #define WOLFSSL_EVP_INCLUDED
-#include "wolfcrypt/src/evp.c"
+#include "../wolfcrypt/src/evp.c"
 
 /* Crypto code uses EVP APIs. */
 #define WOLFSSL_SSL_CRYPTO_INCLUDED
-#include "src/ssl_crypto.c"
+#include "ssl_crypto.c"
 
 #ifndef WOLFCRYPT_ONLY
 #define WOLFSSL_SSL_CERTMAN_INCLUDED
-#include "src/ssl_certman.c"
+#include "ssl_certman.c"
 
 #define WOLFSSL_SSL_SESS_INCLUDED
-#include "src/ssl_sess.c"
+#include "ssl_sess.c"
 #endif
 
 #if (defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)) && \
@@ -404,15 +404,15 @@ WC_RNG* wolfssl_make_rng(WC_RNG* rng, int* local)
 #endif /* OPENSSL_EXTRA */
 
 #define WOLFSSL_SSL_BN_INCLUDED
-#include "src/ssl_bn.c"
+#include "ssl_bn.c"
 
 #ifndef OPENSSL_EXTRA_NO_ASN1
 #define WOLFSSL_SSL_ASN1_INCLUDED
-#include "src/ssl_asn1.c"
+#include "ssl_asn1.c"
 #endif /* OPENSSL_EXTRA_NO_ASN1 */
 
 #define WOLFSSL_PK_INCLUDED
-#include "src/pk.c"
+#include "pk.c"
 
 #include <wolfssl/wolfcrypt/hpke.h>
 
@@ -6420,7 +6420,7 @@ void wolfSSL_set_security_level(WOLFSSL * ssl, int level)
 
 
 #define WOLFSSL_SSL_LOAD_INCLUDED
-#include <src/ssl_load.c>
+#include "ssl_load.c"
 
 #ifndef NO_CERTS
 
@@ -23113,7 +23113,7 @@ int wolfSSL_set_alpn_protos(WOLFSSL* ssl,
 
 #ifndef NO_BIO
 #define WOLFSSL_BIO_INCLUDED
-#include "src/bio.c"
+#include "bio.c"
 #endif
 
 word32 nid2oid(int nid, int grp)
@@ -24625,7 +24625,7 @@ int wolfSSL_AsyncEncryptSetSignal(WOLFSSL* ssl, int idx,
 
 #ifndef NO_CERT
 #define WOLFSSL_X509_INCLUDED
-#include "src/x509.c"
+#include "x509.c"
 #endif
 
 /*******************************************************************************
@@ -24909,7 +24909,7 @@ void wolfSSL_BUF_MEM_free(WOLFSSL_BUF_MEM* buf)
  ******************************************************************************/
 
 #define WOLFSSL_CONF_INCLUDED
-#include <src/conf.c>
+#include "conf.c"
 
 /*******************************************************************************
  * START OF RAND API
@@ -25945,10 +25945,10 @@ void wolfSSL_aes_ctr_iv(WOLFSSL_EVP_CIPHER_CTX* ctx, int doset,
 #ifndef NO_CERTS
 
 #define WOLFSSL_X509_STORE_INCLUDED
-#include <src/x509_str.c>
+#include "x509_str.c"
 
 #define WOLFSSL_SSL_P7P12_INCLUDED
-#include <src/ssl_p7p12.c>
+#include "ssl_p7p12.c"
 
 #endif /* !NO_CERTS */
 

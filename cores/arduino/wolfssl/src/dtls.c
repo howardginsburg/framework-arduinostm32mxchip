@@ -61,7 +61,7 @@
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "../wolfcrypt/src/misc.c"
 #endif
 
 #define ERROR_OUT(err, eLabel) { ret = (err); goto eLabel; }

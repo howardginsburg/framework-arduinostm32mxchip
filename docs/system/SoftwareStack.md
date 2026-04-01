@@ -128,21 +128,34 @@ The index into this array is `pin & 0x0F` — the GPIO pin number within the por
 
 mbed's portable network abstraction layer. `TCPSocket`, `UDPSocket`, `WiFiInterface`, `nsapi_error_t` — all NSAPI types. The WiFi driver, lwIP, the TLS socket, and all application code speak NSAPI, enabling the stack to be swapped without touching application code.
 
-### mbedTLS
+### mbedTLS (Legacy — Pre-compiled Binaries Only)
 
-Compiled into `system/libdevkit-sdk-core-lib.a` with the algorithm set selected in `system/mbed_config.h`:
+mbedTLS is compiled into the pre-compiled binary `system/libdevkit-sdk-core-lib.a`. The algorithm set in `system/mbed_config.h` is retained for binary compatibility:
 
 ```c
-#define MBEDTLS_SHA256_C           // HMAC-SHA256 for SAS tokens
-#define MBEDTLS_SHA1_C             // TLS certificate fingerprints
+#define MBEDTLS_SHA256_C           // Used internally by pre-compiled libs
+#define MBEDTLS_SHA1_C             // Used internally by pre-compiled libs
 #define MBEDTLS_MD5_C              // Legacy compatibility
-#define MBEDTLS_SSL_PROTO_TLS1_1   // TLS 1.1 support
-#define MBEDTLS_SSL_PROTO_TLS1_2   // TLS 1.2 support
+#define MBEDTLS_SSL_PROTO_TLS1_1   // Used internally by pre-compiled libs
+#define MBEDTLS_SSL_PROTO_TLS1_2   // Used internally by pre-compiled libs
 #define MBEDTLS_MPI_MAX_SIZE  512  // RSA modulus up to 4096 bits
 #define MBEDTLS_MPI_WINDOW_SIZE 1  // RAM-conserving sliding window
 ```
 
-`USE_MBED_TLS` is always defined — the TLS stack is unconditionally present. The `MBEDTLS_MPI_WINDOW_SIZE 1` setting trades execution speed for ~2–4 KB less peak stack during RSA operations, important on a 256 KB RAM device.
+> **Note:** The framework's own TLS and crypto operations (TLSSocket, AzureIoTCrypto, DeviceConfigRuntime) have been migrated to **wolfSSL 5.7.6**. The mbedTLS headers in `system/mbed-os/features/mbedtls/` and the defines above are retained solely because the pre-compiled binaries (`libdevkit-sdk-core-lib.a`, `libstsafe.a`) link against them internally.
+
+### wolfSSL 5.7.6
+
+wolfSSL provides the open-source TLS/crypto stack for all framework code. Source files live in `cores/arduino/wolfssl/` (compiled as part of the build) with headers in `system/wolfssl/include/`. Build configuration is in `system/wolfssl/user_settings.h`.
+
+Key capabilities:
+- **TLS 1.2 and TLS 1.3** client support (TLS 1.0/1.1 disabled)
+- **ECDHE + RSA/ECDSA** key exchange and server authentication
+- **AES-GCM, ChaCha20-Poly1305** cipher suites
+- **HMAC-SHA256** for Azure IoT SAS token generation
+- **Base64** encode/decode for key encoding
+- **X.509 certificate parsing** via wolfCrypt `DecodedCert`
+- **SP math with ARM Cortex-M assembly** optimisations for constrained flash/RAM
 
 ### FATFileSystem and BlockDevice
 
@@ -252,24 +265,24 @@ These sizes are fixed by the personalization that was written to the chip at the
 
 ## Layer 4 — TLS Socket
 
-[`cores/arduino/TLSSocket.cpp`](../../cores/arduino/TLSSocket.cpp) implements a TLS session on top of an NSAPI `TCPSocket`, using mbedTLS directly.
+[`cores/arduino/TLSSocket.cpp`](../../cores/arduino/TLSSocket.cpp) implements a TLS session on top of an NSAPI `TCPSocket`, using wolfSSL 5.7.6.
 
 ### Key design choice: IoT Hub SDK–style polling recv
 
-During the TLS handshake, the mbedTLS engine calls `ssl_recv()` repeatedly. The original implementation blocked the RTOS thread, causing timeouts with some MQTT brokers. This fork reimplements `ssl_recv()` to match the approach used by the Azure IoT C SDK's `tlsio_mbedtls.c`:
+During the TLS handshake, the wolfSSL engine calls `wolfssl_recv()` repeatedly. The original mbedTLS implementation blocked the RTOS thread, causing timeouts with some MQTT brokers. The wolfSSL port retains the improved approach from the Azure IoT C SDK's `tlsio_mbedtls.c`, adapted for wolfSSL's I/O callback API:
 
 ```cpp
-static int ssl_recv(void *ctx, unsigned char *buf, size_t len) {
+static int wolfssl_recv(WOLFSSL *ssl, char *buf, int sz, void *ctx) {
     TLSSocket *tls = static_cast<TLSSocket *>(ctx);
     // During handshake: poll with wait_ms() between attempts, timeout at HANDSHAKE_TIMEOUT_MS
-    // After handshake: return MBEDTLS_ERR_SSL_WANT_READ immediately if no data
+    // After handshake: return WOLFSSL_CBIO_ERR_WANT_READ immediately if no data
     while (tls->_recv_buffer_count == 0) {
         int recv_result = socket->recv(temp_buf, sizeof(temp_buf));
         if (recv_result > 0) { /* buffer it */ break; }
         else if (recv_result == NSAPI_ERROR_WOULD_BLOCK) {
             if (tls->_handshake_complete) break;  // non-blocking post-handshake
             if (pending++ >= HANDSHAKE_TIMEOUT_MS / HANDSHAKE_WAIT_INTERVAL_MS)
-                return MBEDTLS_ERR_SSL_TIMEOUT;
+                return WOLFSSL_CBIO_ERR_TIMEOUT;
             wait_ms(HANDSHAKE_WAIT_INTERVAL_MS);  // yield to RTOS during handshake
         }
     }
@@ -277,7 +290,7 @@ static int ssl_recv(void *ctx, unsigned char *buf, size_t len) {
 }
 ```
 
-Received data is accumulated in a heap-allocated `_recv_buffer`, which grows with `realloc()` as chunks arrive. This avoids the mbedTLS internal buffer size restrictions during the handshake record exchange.
+Received data is accumulated in a heap-allocated `_recv_buffer`, which grows with `realloc()` as chunks arrive. This avoids buffer size restrictions during the handshake record exchange.
 
 ### WiFiClientSecure
 
@@ -377,7 +390,7 @@ The index is `pin & 0x0F` — the lower nibble of the `PinName` enum value, whic
 ```
 PubSubClient::publish()
   └─ WiFiClientSecure::write()           // Arduino Client* interface
-       └─ TLSSocket::send()              // mbedTLS: encrypt record
+       └─ TLSSocket::send()              // wolfSSL: encrypt record
             └─ ssl_send() callback
                  └─ TCPSocket::send()    // NSAPI write to socket
                       └─ lwIP tcp_write() / tcp_output()

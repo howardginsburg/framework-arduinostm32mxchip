@@ -103,7 +103,7 @@ RSA Key Size Configuration:
     #include <wolfssl/wolfcrypt/misc.h>
 #else
     #define WOLFSSL_MISC_INCLUDED
-    #include <wolfcrypt/src/misc.c>
+    #include "misc.c"
 #endif
 
 #if FIPS_VERSION3_GE(6,0,0)
