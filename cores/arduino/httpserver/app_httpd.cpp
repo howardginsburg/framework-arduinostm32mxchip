@@ -77,8 +77,9 @@ static const char* page_head =
     "header .logo{color:#f5f5f5;text-decoration:none;}"
     "form{background:#eee;border:1px solid #c9c9c9;margin:0.5rem;padding:0.75rem;}"
     ".input-group{margin:0.5rem 0;}"
-    ".input-group.fluid{display:flex;align-items:center;}"
+    ".input-group.fluid{display:flex;flex-direction:column;align-items:stretch;}"
     ".input-group.fluid>input:not([type=\"radio\"]),.input-group.fluid>textarea,.input-group.fluid>select{width:100%;flex-grow:1;}"
+    "label{display:block;font-weight:500;font-size:0.85rem;color:#424242;margin-bottom:0.1rem;}"
     "[type=\"password\"],[type=\"text\"],select,textarea{width:100%;box-sizing:border-box;background:#fafafa;color:#212121;border:1px solid #c9c9c9;border-radius:2px;margin:0.25rem 0;padding:0.5rem;}"
     "input:focus,select:focus,textarea:focus{border-color:#0288d1;outline:none;}"
     "::placeholder{color:#616161;}"
@@ -206,8 +207,9 @@ static int generateFieldHtml(char* buffer, int bufferSize, const SettingUIMetada
     if (field->fieldType == UI_FIELD_TEXTAREA)
     {
         ret = snprintf(buffer, bufferSize,
-            "<div class=\"input-group fluid\"><textarea name=\"%s\" rows=\"3\" placeholder=\"%s\">",
-            field->webFormName, field->webPlaceholder);
+            "<div class=\"input-group fluid\"><label for=\"%s\">%s</label>"
+            "<textarea id=\"%s\" name=\"%s\" rows=\"3\" placeholder=\"%s\">",
+            field->webFormName, field->label, field->webFormName, field->webFormName, field->webPlaceholder);
         len += (ret > 0 ? ret : 0);
         
         if (hasValue)
@@ -221,8 +223,9 @@ static int generateFieldHtml(char* buffer, int bufferSize, const SettingUIMetada
     else
     {
         ret = snprintf(buffer, bufferSize,
-            "<div class=\"input-group fluid\"><input type=\"text\" name=\"%s\" placeholder=\"%s\" value=\"",
-            field->webFormName, field->webPlaceholder);
+            "<div class=\"input-group fluid\"><label for=\"%s\">%s</label>"
+            "<input type=\"text\" id=\"%s\" name=\"%s\" placeholder=\"%s\" value=\"",
+            field->webFormName, field->label, field->webFormName, field->webFormName, field->webPlaceholder);
         len += (ret > 0 ? ret : 0);
         
         if (hasValue)
@@ -605,6 +608,7 @@ static int webSettingsPage(httpd_request_t* req)
         int ret = snprintf(&page[len], DEFAULT_PAGE_SIZE - len,
             "<fieldset><legend>Wi-Fi Settings</legend>"
             "<div class=\"input-group fluid\">"
+            "<label for=\"SSID-select\">Wi-Fi Network</label>"
             "<select id=\"SSID-select\" name=\"SSID\" onchange=\"ssidChanged()\">"
             "<option value=\"\" disabled%s>-- Select Wi-Fi Network --</option>",
             (!ssidInList && currentSsid[0] == '\0') ? " selected" : "");
@@ -640,7 +644,8 @@ static int webSettingsPage(httpd_request_t* req)
             "\">"
             "</div>"
             "<div class=\"input-group fluid\">"
-            "<input type=\"text\" name=\"PASS\" "
+            "<label for=\"PASS\">Wi-Fi Password</label>"
+            "<input type=\"text\" id=\"PASS\" name=\"PASS\" "
             "placeholder=\"Wi-Fi Password\" value=\"");
         len += (ret > 0 ? ret : 0);
         
