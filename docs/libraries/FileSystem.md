@@ -82,3 +82,40 @@ filesystem_info fatfs_get_info();
 - mbed OS (`BlockDevice` interface)
 - FatFS (`ff.h`)
 - MiCO SPI flash driver
+
+---
+
+## Framework Filesystem Mount
+
+Since v2.3.0, the framework automatically mounts a FAT filesystem at `/fs/` at boot via `SystemFileSystem` (defined in `cores/arduino/config/SystemFileSystem.h`). This mount happens before `DeviceConfig_LoadAll()`, so file-backed settings are available from the start of `setup()`.
+
+### What the framework manages
+
+- **Mount point:** `/fs/` — mounted once at boot, auto-formats the partition on first use
+- **Config file:** `/fs/device.cfg` — managed by [DeviceConfig](../cores/DeviceConfig.md) for file-backed settings (`send_interval`, `publish_topic`, `subscribe_topic`)
+
+### Using `/fs/` in your sketch
+
+Your sketch can safely create and use additional files under `/fs/` using standard C file I/O:
+
+```cpp
+// Safe — your own file alongside the framework's config file
+FILE* f = fopen("/fs/mydata.txt", "w");
+fprintf(f, "sensor_log=123\n");
+fclose(f);
+```
+
+**Do not:**
+- Create a separate `FATFileSystem("fs")` instance — the framework owns this mount point and a duplicate mount will fail or cause undefined behavior
+- Overwrite or delete `/fs/device.cfg` — this is the framework's config file
+
+### About the FileSystem.ino example
+
+The [FileSystem.ino](../../libraries/FileSystem/examples/FileSystem/FileSystem.ino) example creates its own `FATFileSystem` mount for demonstration purposes. When using `DeviceConfig` (any profile except `PROFILE_NONE`), the framework already mounts `/fs/` automatically — skip the manual mount step in the example and use the existing mount point directly.
+
+---
+
+## See Also
+
+- [DeviceConfig — File-Backed Settings](../cores/DeviceConfig.md#file-backed-settings) — Config file format and API
+- [EEPROM](../cores/EEPROM.md) — Secure element storage (separate from SFlash)

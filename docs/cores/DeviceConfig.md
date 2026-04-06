@@ -18,6 +18,52 @@ The DeviceConfig system provides:
 
 ---
 
+## Architecture
+
+The configuration system is a layered storage abstraction that routes logical settings to physical storage — either STSAFE EEPROM zones or the SFlash config file — based on the active connection profile.
+
+```mermaid
+flowchart TB
+    subgraph Hardware["Hardware Storage"]
+        STSAFE["STSAFE-A100 Secure Element\n8 EEPROM zones · 4,304 bytes total"]
+        SFlash["SPI Flash (SFlash)\nFAT filesystem at /fs/"]
+    end
+
+    subgraph Framework["Framework Abstraction"]
+        EEPROM["EEPROMInterface\nLow-level zone read/write"]
+        ConfigFile["DeviceConfigFile\nKey=value in /fs/device.cfg"]
+        DC["DeviceConfig\nProfile-selected zone mappings\n+ runtime buffers"]
+    end
+
+    subgraph Interface["User Interfaces"]
+        CLI["Serial CLI\nset_wifissid, set_broker, ..."]
+        WebUI["Web Configuration UI\nForms with profile-aware fields"]
+        API["Sketch API\nDeviceConfig_Get*() accessors"]
+    end
+
+    STSAFE --> EEPROM
+    SFlash --> ConfigFile
+    EEPROM --> DC
+    ConfigFile --> DC
+    DC --> CLI
+    DC --> WebUI
+    DC --> API
+```
+
+**Data flow:** At boot, `DeviceConfig_Init(CONNECTION_PROFILE)` selects the active profile, which defines a mapping table from `SettingID` values to physical storage locations. `DeviceConfig_LoadAll()` then reads all mapped zones (EEPROM and config file) into static RAM buffers. The CLI, web UI, and accessor functions all operate on these buffers and write back through the same mapping.
+
+### When to Use EEPROMInterface Directly
+
+Almost never. `DeviceConfig` handles zone selection, multi-zone spanning, file-backed routing, and validation automatically. Direct `EEPROMInterface` access is only appropriate for:
+
+- **Diagnostics** — dumping raw zone contents for debugging
+- **Factory provisioning tools** — bulk-writing zones outside the normal profile flow
+- **Custom storage** beyond the 17 `SettingID` slots (rare — consider file-backed settings first)
+
+> **Warning:** Writing directly to a zone that the active profile also manages will corrupt the corresponding `DeviceConfig` setting. Always check the active profile's zone assignments before using `EEPROMInterface` directly.
+
+---
+
 ## Connection Profiles
 
 | Profile | Value | Description |
@@ -140,6 +186,24 @@ subscribe_topic=devices/mydevice/messages/devicebound/#
 
 > **Note:** The framework mounts the SFlash FAT filesystem at `/fs/` automatically before `DeviceConfig_LoadAll()`. Do not create a separate `FATFileSystem("fs")` instance in your sketch — the framework owns this mount point. See `SystemFileSystem.h` for details.
 
+#### Config File Key Mapping
+
+Each file-backed `SettingID` maps to a fixed key name in `/fs/device.cfg`:
+
+| SettingID | Config file key | Max length |
+|-----------|----------------|------------|
+| `SETTING_SEND_INTERVAL` | `send_interval` | 16 bytes |
+| `SETTING_PUBLISH_TOPIC` | `publish_topic` | 256 bytes |
+| `SETTING_SUBSCRIBE_TOPIC` | `subscribe_topic` | 256 bytes |
+
+#### Config File Behavior
+
+- **Atomic writes:** `ConfigFile_Save()` reads the existing file, updates or appends the key, and rewrites the entire file. This prevents partial writes from corrupting the file.
+- **Max file size:** Bounded by the SFlash partition size (typically several hundred KB). The three built-in keys with maximum-length values total well under 1 KB.
+- **Custom keys:** Only the three built-in keys (`send_interval`, `publish_topic`, `subscribe_topic`) are supported through the `DeviceConfig` API. User sketches can read/write additional files under `/fs/` using standard C file I/O (`fopen`, `fprintf`, `fclose`), but cannot add custom keys to `device.cfg` without framework changes.
+- **Thread safety:** File operations are not thread-safe. `ConfigFile_Save()` and `ConfigFile_Read()` should be called from the main loop context only, not from ISRs or RTOS threads.
+- **Coexistence:** User sketches can safely create their own files under `/fs/` (e.g., `/fs/mydata.txt`) as long as they don't overwrite `/fs/device.cfg`. See [FileSystem Library](../libraries/FileSystem.md) for details.
+
 ### Combined Buffer Sizes
 
 | Constant | Value | Description |
@@ -240,8 +304,63 @@ typedef struct {
 
 ---
 
+## Verifying Configuration
+
+### Using the CLI
+
+After configuring settings, use the `show_config` CLI command to verify all values. Enter CLI mode by holding **Button A** while pressing **Reset**, then connect via serial at 115200 baud.
+
+Example output for `PROFILE_MQTT_USERPASS_TLS`:
+
+```
+Profile: MQTT Username/Password (TLS)
+  WiFi SSID:       MyNetwork
+  WiFi Password:   ********
+  Broker URL:      mqtts://broker.hivemq.com:8883
+  Device ID:       sensor-01
+  Device Password: ********
+  CA Cert:         [set, 1247 bytes]
+  Send Interval:   30
+  Publish Topic:   devices/sensor-01/telemetry
+  Subscribe Topic: devices/sensor-01/commands/#
+```
+
+Settings that are not available in the active profile are omitted from the output. Certificate and key values show their length rather than the full PEM text.
+
+### Confirming writes
+
+After each `set_*` command, the CLI validates the value and prints a confirmation or error. Run `show_config` afterward to verify the value was stored correctly. If a value appears blank or truncated:
+
+- Check that the value doesn't exceed the zone's maximum length (shown in `help` output)
+- For certificates and keys, ensure the full PEM content was sent including `-----BEGIN` / `-----END` markers
+- For multi-line values (certs/keys), use the escape sequence `\\n` to represent newlines on a single CLI line
+
+### Clearing settings
+
+To clear all EEPROM zones back to their erased state, write empty or zero-filled data to each zone using the CLI. There is no single "factory reset" CLI command, but you can clear individual settings:
+
+```
+set_wifissid ""
+set_broker ""
+set_deviceid ""
+```
+
+File-backed settings (`send_interval`, `publish_topic`, `subscribe_topic`) revert to their defaults when cleared — the defaults are applied by `DeviceConfig_LoadAll()` at boot if the config file has no value for a key.
+
+### Debugging "settings not loading"
+
+If your sketch doesn't see the expected configuration values:
+
+1. **Verify the profile** — Check that `CONNECTION_PROFILE` in `platformio.ini` matches the profile you configured via CLI. A mismatch means the profile reads from different zones than where you wrote.
+2. **Check boot order** — `DeviceConfig_LoadAll()` runs before `setup()`. If you call `DeviceConfig_Read()` in `setup()` or `loop()`, the values should already be loaded.
+3. **Inspect raw output** — Use `show_config` in CLI mode to confirm what the profile actually reads from storage.
+4. **File-backed settings** — If `send_interval`, `publish_topic`, or `subscribe_topic` aren't loading, check that the SFlash filesystem mounted successfully (a mount failure is logged to serial at boot).
+
+---
+
 ## See Also
 
+- [Custom Connection Profiles](../CustomProfile.md) — Define your own profile with custom zone mappings
 - [EEPROM](EEPROM.md) — Underlying storage zones
 - [HTTP Server](HTTPServer.md) — Web configuration server
 - [System Services](SystemServices.md) — WiFi connection using saved credentials

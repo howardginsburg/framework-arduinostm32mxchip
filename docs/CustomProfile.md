@@ -18,6 +18,11 @@ A connection profile controls which configuration settings are available and how
 - [Reference: Zone Mapping Macros](#reference-zone-mapping-macros)
 - [Example: Full Custom Profile Walkthrough](#example-full-custom-profile-walkthrough)
 - [Example: Custom UI Labels](#example-custom-ui-labels)
+- [Example: Multi-Zone Certificate Storage](#example-multi-zone-certificate-storage)
+- [Example: Using File-Backed Settings](#example-using-file-backed-settings)
+- [Migrating from a Built-In Profile](#migrating-from-a-built-in-profile)
+- [Troubleshooting](#troubleshooting)
+- [Validation Behavior in Custom Profiles](#validation-behavior-in-custom-profiles)
 - [Tips and Constraints](#tips-and-constraints)
 
 ---
@@ -53,7 +58,7 @@ This file must define a `const ProfileDefinition` variable named `CUSTOM_PROFILE
 /**
  * Custom profile definition.
  *
- * The mappings array has exactly SETTING_COUNT (14) entries, one per SettingID,
+ * The mappings array has exactly SETTING_COUNT (17) entries, one per SettingID,
  * in the order they appear in the SettingID enum. Every slot must be filled —
  * use UNUSED_ZONE for settings your profile doesn't need.
  */
@@ -473,6 +478,150 @@ Configuration commands for profile 'REST API Sensor Station':
 ```
 
 The web configuration page also uses these labels and placeholder text automatically — a user configuring the device sees "API Endpoint" and "Station ID" instead of "Broker URL" and "Device ID".
+
+---
+
+## Example: Multi-Zone Certificate Storage
+
+If your custom profile needs to store large certificates (e.g., a CA certificate chain), you can span data across multiple EEPROM zones using the `ZONE2()` or `ZONE3()` macros. The framework writes and reads the data sequentially across zones with no padding.
+
+For example, a CA certificate up to 2,640 bytes can span zones 0, 7, and 8:
+
+```c
+static const ProfileDefinition CUSTOM_PROFILE = {
+    PROFILE_CUSTOM,
+    "mTLS Gateway Client",
+    "Connects to a custom gateway with mutual TLS",
+    {
+        ZONE(3, ZONE_3_SIZE),                                           // SETTING_WIFI_SSID
+        ZONE(10, ZONE_10_SIZE),                                         // SETTING_WIFI_PASSWORD
+        ZONE(5, ZONE_5_SIZE),                                           // SETTING_BROKER_URL      → Gateway URL
+        ZONE(2, ZONE_2_SIZE),                                           // SETTING_DEVICE_ID        → Client name
+        UNUSED_ZONE,                                                    // SETTING_DEVICE_PASSWORD
+        ZONE3(0, ZONE_0_SIZE, 7, ZONE_7_SIZE, 8, ZONE_8_SIZE),         // SETTING_CA_CERT          → Large CA cert (2,640 bytes)
+        ZONE2(6, ZONE_6_SIZE, 7, ZONE_7_SIZE),                         // SETTING_CLIENT_CERT      → Client cert (1,464 bytes)
+        ZONE(8, ZONE_8_SIZE),                                           // SETTING_CLIENT_KEY       → Client key (880 bytes)
+        UNUSED_ZONE,                                                    // SETTING_CONNECTION_STRING
+        UNUSED_ZONE,                                                    // SETTING_DPS_ENDPOINT
+        UNUSED_ZONE,                                                    // SETTING_SCOPE_ID
+        UNUSED_ZONE,                                                    // SETTING_REGISTRATION_ID
+        UNUSED_ZONE,                                                    // SETTING_SYMMETRIC_KEY
+        UNUSED_ZONE,                                                    // SETTING_DEVICE_CERT
+        UNUSED_ZONE,                                                    // SETTING_SEND_INTERVAL
+        UNUSED_ZONE,                                                    // SETTING_PUBLISH_TOPIC
+        UNUSED_ZONE                                                     // SETTING_SUBSCRIBE_TOPIC
+    }
+};
+```
+
+> **Zone sharing across settings:** In the example above, zones 7 and 8 appear in both `SETTING_CA_CERT` (as parts of a 3-zone span) and `SETTING_CLIENT_CERT` / `SETTING_CLIENT_KEY`. This is valid only if you never store the CA cert and client cert/key simultaneously at their full sizes. If you need all three at maximum capacity, assign non-overlapping zones to each setting.
+
+---
+
+## Example: Using File-Backed Settings
+
+If your custom profile needs configurable operational settings (like a polling interval or topic names), use the `FILE_ZONE()` macro to store them in `/fs/device.cfg` instead of EEPROM:
+
+```c
+static const ProfileDefinition CUSTOM_PROFILE = {
+    PROFILE_CUSTOM,
+    "MQTT Sensor Node",
+    "Publishes sensor data to an MQTT broker with configurable topics",
+    {
+        ZONE(3, ZONE_3_SIZE),                       // SETTING_WIFI_SSID
+        ZONE(10, ZONE_10_SIZE),                     // SETTING_WIFI_PASSWORD
+        ZONE(5, ZONE_5_SIZE),                       // SETTING_BROKER_URL
+        ZONE(2, ZONE_2_SIZE),                       // SETTING_DEVICE_ID
+        ZONE(6, ZONE_6_SIZE),                       // SETTING_DEVICE_PASSWORD
+        UNUSED_ZONE,                                // SETTING_CA_CERT
+        UNUSED_ZONE,                                // SETTING_CLIENT_CERT
+        UNUSED_ZONE,                                // SETTING_CLIENT_KEY
+        UNUSED_ZONE,                                // SETTING_CONNECTION_STRING
+        UNUSED_ZONE,                                // SETTING_DPS_ENDPOINT
+        UNUSED_ZONE,                                // SETTING_SCOPE_ID
+        UNUSED_ZONE,                                // SETTING_REGISTRATION_ID
+        UNUSED_ZONE,                                // SETTING_SYMMETRIC_KEY
+        UNUSED_ZONE,                                // SETTING_DEVICE_CERT
+        FILE_ZONE(MAX_SEND_INTERVAL_SIZE),          // SETTING_SEND_INTERVAL    → /fs/device.cfg
+        FILE_ZONE(MAX_PUBLISH_TOPIC_SIZE),          // SETTING_PUBLISH_TOPIC    → /fs/device.cfg
+        FILE_ZONE(MAX_SUBSCRIBE_TOPIC_SIZE)         // SETTING_SUBSCRIBE_TOPIC  → /fs/device.cfg
+    }
+};
+```
+
+This enables the `set_interval`, `set_pubtopic`, and `set_subtopic` CLI commands for your custom profile. In your sketch:
+
+```cpp
+int interval = DeviceConfig_GetSendInterval();       // Default: 30 seconds
+const char* pubTopic = DeviceConfig_GetPublishTopic();
+```
+
+---
+
+## Migrating from a Built-In Profile
+
+If you start with a built-in profile (e.g., `PROFILE_MQTT_USERPASS`) and later switch to `PROFILE_CUSTOM`:
+
+- **EEPROM data persists across profile changes** — if your custom profile maps the same settings to the same zones as the original profile, the stored values carry over automatically.
+- **If zone assignments differ**, the old data remains in the original zones but the new profile reads from different zones. Re-enter values via the CLI or web UI.
+- **File-backed settings** (`/fs/device.cfg`) are profile-independent — they persist regardless of which profile is active.
+
+To plan a smooth migration, compare the zone assignments of your built-in profile (documented in `DeviceConfig.cpp`) with your planned custom profile assignments.
+
+---
+
+## Troubleshooting
+
+### "error: 'CUSTOM_PROFILE' was not declared in this scope"
+
+The framework couldn't find your profile definition. Check:
+1. The file is named exactly **`custom_profile.h`** (the framework uses `__has_include("custom_profile.h")`)
+2. The file is in your project's `include/` or `src/` directory (must be on PlatformIO's include path)
+3. The variable is named exactly **`CUSTOM_PROFILE`** — the framework references this name directly
+4. You have `-DCONNECTION_PROFILE=PROFILE_CUSTOM` in your `platformio.ini` `build_flags`
+
+### "expected '}' before end of input" or array size errors
+
+Your mappings array must have exactly **17 entries** — one for each `SettingID` in enum order, including the three file-backed settings at the end (indices 14–16). A common mistake is using the old count of 14 from earlier framework versions. Use `UNUSED_ZONE` for settings your profile doesn't need.
+
+### Data appears corrupted or reads back wrong values
+
+- **Zone overlap:** Two settings in your profile may be mapped to the same zone. Each zone can only be assigned to one setting. The framework does not detect this at compile time — overlapping zones silently corrupt data.
+- **Profile change:** If you switched from a built-in profile, old data remains in zones. The new profile may interpret it differently. Re-enter values via CLI.
+- **Direct EEPROM writes:** If your sketch also uses `EEPROMInterface` directly, it may overwrite zones that `DeviceConfig` manages.
+
+### Validation rejects values that should be valid
+
+Format validation is tied to the `SettingID`, not the profile. When you repurpose a setting (e.g., storing a REST URL in `SETTING_BROKER_URL`), the framework's validators still apply the original format rules. See [Validation Behavior in Custom Profiles](#validation-behavior-in-custom-profiles) below for details and workarounds.
+
+---
+
+## Validation Behavior in Custom Profiles
+
+Format validation in the framework is dispatched by `SettingID`, **not** by the active profile. This means repurposed settings still run their original validators when saved via the CLI or `DeviceConfig_Save()`. Understanding this is important when storing non-standard data in built-in setting slots.
+
+### Settings with format validators
+
+| SettingID | Validator | What it checks | Custom profile impact |
+|-----------|-----------|-----------------|----------------------|
+| `SETTING_BROKER_URL` | `Validator_BrokerUrl` | Accepts `mqtt://`, `mqtts://`, `ssl://` prefixes or bare `hostname:port`. **Rejects** `https://`, `http://`, or any URL with a non-numeric port suffix. | If storing a REST URL like `https://api.example.com`, use the bare hostname (`api.example.com`) or `api.example.com:443` instead. |
+| `SETTING_CA_CERT` | `Validator_PemCertificate` | Requires `-----BEGIN CERTIFICATE-----` / `-----END CERTIFICATE-----` markers. | Only store PEM-formatted certificates. Cannot be repurposed for arbitrary text. |
+| `SETTING_CLIENT_CERT` | `Validator_PemCertificate` | Same as CA cert. | Same constraint. |
+| `SETTING_DEVICE_CERT` | `Validator_PemCertificate` | Same as CA cert. | Same constraint. |
+| `SETTING_CLIENT_KEY` | `Validator_PemPrivateKey` | Requires PEM private key markers (RSA, EC, or PKCS#8). | Only store PEM-formatted private keys. |
+| `SETTING_CONNECTION_STRING` | `Validator_IotHubConnectionString` | Requires `HostName=`, `DeviceId=`, and either `SharedAccessKey=` or `x509=true`. | Cannot be repurposed for arbitrary strings. |
+| `SETTING_SCOPE_ID` | `Validator_DpsScopeId` | Checks for `0ne` prefix (but accepts any non-empty string). | Effectively no constraint — safe to repurpose. |
+| `SETTING_SEND_INTERVAL` | `Validator_Numeric` | Must be a valid integer string. | Only store numeric values. |
+
+### Settings without format validators
+
+These settings only have length checks and can store any string data:
+
+`SETTING_WIFI_SSID`, `SETTING_WIFI_PASSWORD`, `SETTING_DEVICE_ID`, `SETTING_DEVICE_PASSWORD`, `SETTING_DPS_ENDPOINT`, `SETTING_REGISTRATION_ID`, `SETTING_SYMMETRIC_KEY`, `SETTING_PUBLISH_TOPIC`, `SETTING_SUBSCRIBE_TOPIC`
+
+### Best practice for custom profiles
+
+When planning zone assignments, prefer settings **without** format validators for general-purpose string storage. Use `SETTING_DEVICE_ID`, `SETTING_DEVICE_PASSWORD`, `SETTING_DPS_ENDPOINT`, `SETTING_REGISTRATION_ID`, or `SETTING_SYMMETRIC_KEY` for arbitrary data. Reserve cert/key settings for actual PEM data, and use `SETTING_BROKER_URL` only for values that pass the broker URL validator (bare hostnames with optional numeric ports).
 
 ---
 

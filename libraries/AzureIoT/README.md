@@ -107,4 +107,4 @@ Credentials are stored in EEPROM and managed through the serial CLI (see `Device
 
 - **PubSubClient** — MQTT client
 - **WiFi** — `WiFiClientSecure` for TLS connections
-- **DeviceConfig** — EEPROM credential storage
+- **[DeviceConfig](../../docs/cores/DeviceConfig.md)** — EEPROM credential storage and profile-based configuration

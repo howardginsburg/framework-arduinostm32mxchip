@@ -4,6 +4,10 @@ Secure persistent storage via the STSAFE-A100 I2C secure element. Provides zone-
 
 > **Source:** [cores/arduino/EEPROMInterface.h](../../cores/arduino/EEPROMInterface.h)
 
+> **Prefer DeviceConfig for new code.** The [DeviceConfig](DeviceConfig.md) system is the recommended high-level API for reading and writing device configuration. It handles profile-based zone selection, multi-zone spanning for large values, file-backed settings, validation, and runtime buffering automatically. Use `EEPROMInterface` directly only for diagnostics, factory provisioning, or storage needs outside the 17 `SettingID` slots.
+
+> **⚠️ Zone safety:** Writing directly to an EEPROM zone that the active connection profile also manages will silently corrupt the corresponding `DeviceConfig` setting. Always check the active profile's zone assignments (see [DeviceConfig — Zone Mapping](DeviceConfig.md#zone-mapping)) before using `EEPROMInterface` for direct writes.
+
 ---
 
 ## Usage
@@ -26,7 +30,11 @@ EEPROMInterface eeprom;
 | `int read(uint8_t *dataBuff, int buffSize, uint16_t offset, uint8_t dataZoneIndex)` | Read data from a zone. Returns bytes read or -1. |
 | `int enableHostSecureChannel(int level = 1, uint8_t *key = NULL)` | Enable encrypted I2C. Level 1=hardcode, 2=user key (32 bytes), 3=random. |
 
+> **Secure channel note:** `enableHostSecureChannel()` encrypts the I2C bus between the STM32 and the STSAFE chip, protecting data in transit on the PCB. This is a hardware-level transport feature and is rarely needed for typical applications. It does not affect how `DeviceConfig` operates — `DeviceConfig` uses the same `EEPROMInterface` instance and works transparently whether the secure channel is enabled or not.
+
 ### Credential Helpers
+
+> **Legacy API.** These convenience methods use hardcoded zone assignments that predate the profile-based `DeviceConfig` system. They remain available for backward compatibility, but new code should use `DeviceConfig_Save()` / `DeviceConfig_Read()` instead, which route to the correct zone based on the active profile.
 
 All return 0 on success, -1 on failure.
 
@@ -53,13 +61,15 @@ All return 0 on success, -1 on failure.
 
 ## Storage Zones
 
-| Zone | Size (bytes) | Purpose |
+The STSAFE secure element has fixed-size storage zones. These sizes are hardware constants. The "Purpose" column shows the conventional usage, but **actual zone assignments vary by connection profile** — a zone labeled "Client certificate" below may store a Device ID or API key in a different profile. See [DeviceConfig — Zone Mapping](DeviceConfig.md#zone-mapping) for profile-specific assignments.
+
+| Zone | Size (bytes) | Conventional Purpose |
 |------|-------------|---------|
 | 0 | 976 | General / X.509 cert (part 1) |
-| 2 | 192 | Client certificate |
+| 2 | 192 | Client certificate / short strings |
 | 3 | 120 | WiFi SSID |
-| 5 | 584 | Azure IoT Hub connection string |
-| 6 | 680 | DPS UDS |
+| 5 | 584 | Azure IoT Hub connection string / URLs |
+| 6 | 680 | DPS UDS / device IDs |
 | 7 | 784 | X.509 cert (part 2) |
 | 8 | 880 | Client private key |
 | 10 | 88 | WiFi password |

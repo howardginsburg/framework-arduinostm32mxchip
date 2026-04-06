@@ -94,7 +94,46 @@ Connection profiles determine which settings are stored in the secure EEPROM and
 - For **generic MQTT brokers** (Mosquitto, HiveMQ, EMQX), start with `PROFILE_MQTT_USERPASS_TLS` or `PROFILE_MQTT_MTLS` depending on your authentication method.
 - For **Azure IoT Hub**, use `PROFILE_IOTHUB_SAS` for the simplest setup, or `PROFILE_DPS_SAS` / `PROFILE_DPS_CERT` for production scenarios with automatic provisioning.
 - For **development/testing** where you hard-code credentials, use `PROFILE_NONE`.
-- For unique requirements, see the [Custom Connection Profiles](CustomProfile.md) guide.
+- For **unique requirements** (REST APIs, LoRa, custom protocols), see the [Custom Connection Profiles](CustomProfile.md) guide.
+
+### Profile decision tree
+
+```mermaid
+flowchart TD
+    Start(["Which profile\nshould I use?"]) --> Azure{"Using Azure\nIoT Hub?"}
+
+    Azure -->|Yes| AzHow{"Direct connect\nor DPS provisioning?"}
+    AzHow -->|Direct| AzAuth{"Authentication?"}
+    AzAuth -->|SAS key| P_HUB_SAS[PROFILE_IOTHUB_SAS]
+    AzAuth -->|X.509 cert| P_HUB_CERT[PROFILE_IOTHUB_CERT]
+
+    AzHow -->|DPS| DpsAuth{"Authentication?"}
+    DpsAuth -->|Individual SAS key| P_DPS_SAS[PROFILE_DPS_SAS]
+    DpsAuth -->|Group SAS key| P_DPS_GROUP[PROFILE_DPS_SAS_GROUP]
+    DpsAuth -->|X.509 cert| P_DPS_CERT[PROFILE_DPS_CERT]
+
+    Azure -->|No| MQTT{"Using MQTT?"}
+    MQTT -->|Yes| MQAuth{"Authentication\nmethod?"}
+    MQAuth -->|Username / password| MQTLS{"Need TLS?"}
+    MQTLS -->|No| P_MQTT_UP[PROFILE_MQTT_USERPASS]
+    MQTLS -->|Yes| P_MQTT_TLS[PROFILE_MQTT_USERPASS_TLS]
+    MQAuth -->|Client certificate| P_MQTT_MTLS[PROFILE_MQTT_MTLS]
+
+    MQTT -->|No| Custom{"Custom protocol\nor storage?"}
+    Custom -->|Yes| P_CUSTOM[PROFILE_CUSTOM]
+    Custom -->|No, hardcoded config| P_NONE[PROFILE_NONE]
+```
+
+**Common scenarios:**
+
+| Scenario | Recommended Profile |
+|----------|-------------------|
+| HiveMQ Cloud | `PROFILE_MQTT_USERPASS_TLS` |
+| Mosquitto with client certificates | `PROFILE_MQTT_MTLS` |
+| Azure IoT Hub (quickstart) | `PROFILE_IOTHUB_SAS` |
+| Azure DPS fleet provisioning | `PROFILE_DPS_SAS` or `PROFILE_DPS_CERT` |
+| REST API, LoRa gateway, or any non-MQTT use case | `PROFILE_CUSTOM` ([guide](CustomProfile.md)) |
+| Development / testing with hardcoded credentials | `PROFILE_NONE` |
 
 ---
 

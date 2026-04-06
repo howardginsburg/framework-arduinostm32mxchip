@@ -30,6 +30,7 @@ sequenceDiagram
 
     Main->>DC: DeviceConfig_Init(CONNECTION_PROFILE)
     activate DC
+    Note right of DC: See DeviceConfig docs
     DC->>DC: Load profile definition
     DC-->>Main: Profile set
     deactivate DC

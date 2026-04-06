@@ -259,7 +259,7 @@ These sizes are fixed by the personalization that was written to the chip at the
 
 **Total accessible storage: 4,304 bytes** across 8 usable zones.
 
-`EEPROMInterface` (`cores/arduino/EEPROMInterface.h/cpp`) wraps `libstsafe.a` into an Arduino-friendly `read(zone, buf, len)` / `write(zone, buf, len)` API. `DeviceConfig` sits on top of `EEPROMInterface`, adding the profile/zone-mapping abstraction and runtime buffers.
+[`EEPROMInterface`](../cores/EEPROM.md) (`cores/arduino/EEPROMInterface.h/cpp`) wraps `libstsafe.a` into an Arduino-friendly `read(zone, buf, len)` / `write(zone, buf, len)` API. [`DeviceConfig`](../cores/DeviceConfig.md) sits on top of `EEPROMInterface`, adding the profile/zone-mapping abstraction and runtime buffers.
 
 ---
 
